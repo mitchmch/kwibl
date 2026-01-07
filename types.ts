@@ -1,3 +1,4 @@
+
 export enum UserRole {
   CUSTOMER = 'CUSTOMER',
   BUSINESS = 'BUSINESS',
@@ -80,6 +81,8 @@ export interface Complaint {
   feedback?: string; // Customer feedback text
   tags: string[];
   history: ComplaintHistory[];
+  views: number; // For admin analytics
+  privateDetails?: Record<string, string>; // Sensitive data only for Admin/Business
 }
 
 export interface AnalyticsMetrics {
@@ -88,3 +91,23 @@ export interface AnalyticsMetrics {
   avgResolutionTimeHours: number;
   customerSatisfactionScore: number;
 }
+
+export type AdminViewType = 
+  | 'OVERVIEW' 
+  | 'MODERATION' 
+  | 'CONTENT_REPORTS' 
+  | 'POLICY_ANALYSIS' 
+  | 'ALL_COMPLAINTS' 
+  | 'USERS' 
+  | 'INDUSTRIES' 
+  | 'BUSINESSES' 
+  | 'NEWS'
+  | 'ANALYTICS'
+  | 'SENTIMENT_INTEL'
+  | 'ESCALATIONS'
+  | 'COMPLIANCE'
+  | 'SUBSCRIPTIONS'
+  | 'SETTINGS_GENERAL'
+  | 'SETTINGS_BRANDING'
+  | 'SETTINGS_TECH_STACK'
+  | 'COMPLAINT_DETAIL';

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useMemo } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { Complaint, UserRole, ComplaintStatus, Comment } from '../types';
 import { useApp } from '../context/AppContext';
 import { Icons } from '../components/Icons';
@@ -10,872 +11,470 @@ interface Props {
 }
 
 const MAX_COMMENT_LENGTH = 1000;
-const EMOJIS = ['👍', '👎', '👏', '🙏', '😄', '😊', '😢', '😠', '❤️', '🎉', '🔥', '👀', '✅', '❌', '🤔', '👋', '🤝', '💼', '⭐', '✨'];
+const COMMON_EMOJIS = ['😊', '🙏', '👍', '😕', '📢', '✅', '📦', '⚠️', '💡', '💯'];
 
 interface CommentNodeProps {
-    comment: Comment;
-    complaintId: string;
-    depth?: number;
-    topContributorId?: string | null;
-    onReply: (comment: Comment) => void;
-    blockedUsers: string[];
-    onToggleBlock: (userId: string) => void;
+  comment: Comment;
+  complaintId: string;
+  depth?: number;
+  onReply: (comment: Comment) => void;
+  blockedUsers: string[];
+  onToggleBlock: (userId: string) => void;
 }
 
-// --- Helper Component for Recursive Comment Rendering ---
-const CommentNode: React.FC<CommentNodeProps> = ({ 
-    comment, 
-    complaintId,
-    depth = 0, 
-    topContributorId,
-    onReply,
-    blockedUsers,
-    onToggleBlock
+const CommentNode: React.FC<CommentNodeProps> = ({
+  comment,
+  complaintId,
+  depth = 0,
+  onReply,
+  blockedUsers,
+  onToggleBlock,
 }) => {
-    const { currentUser, toggleCommentUpvote } = useApp();
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [translation, setTranslation] = useState<string | null>(null);
-    const [isTranslating, setIsTranslating] = useState(false);
-    
-    // Toggle translation
-    const handleTranslate = async () => {
-        if (translation) {
-            setTranslation(null);
-            return;
-        }
-        setIsTranslating(true);
-        // Defaulting to English for demo purposes, in real app would use user preference
-        const result = await translateText(comment.content, "English");
-        setTranslation(result);
-        setIsTranslating(false);
-    };
+  const { currentUser, toggleCommentUpvote, reportComment } = useApp();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
 
-    const isTopContributor = topContributorId && comment.userId === topContributorId;
-    const hasUpvoted = currentUser ? comment.upvotes.includes(currentUser.id) : false;
-    const isBlocked = blockedUsers.includes(comment.userId);
-    const isForeign = comment.language && comment.language !== 'English';
-
-    if (isBlocked) {
-        return (
-            <div className={`flex flex-col ${depth > 0 ? 'mt-4' : ''}`}>
-                <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 text-slate-500 text-sm flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                         <Icons.Shield className="w-4 h-4 text-slate-400" />
-                         <span>Content from <strong>{comment.userName}</strong> has been blocked.</span>
-                    </div>
-                    <button 
-                        onClick={() => onToggleBlock(comment.userId)}
-                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline"
-                    >
-                        Unblock
-                    </button>
-                </div>
-                {/* Render replies even if parent is blocked, to maintain thread continuity */}
-                {comment.replies.length > 0 && (
-                    <div className="ml-6 md:ml-12 border-l-2 border-slate-100 pl-4 md:pl-6">
-                        {comment.replies.map(reply => (
-                            <CommentNode 
-                                key={reply.id} 
-                                comment={reply} 
-                                complaintId={complaintId}
-                                depth={depth + 1} 
-                                topContributorId={topContributorId}
-                                onReply={onReply}
-                                blockedUsers={blockedUsers}
-                                onToggleBlock={onToggleBlock}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
+  const handleTranslate = async () => {
+    if (translation) {
+      setTranslation(null);
+      return;
     }
+    setIsTranslating(true);
+    const result = await translateText(comment.content, "English");
+    setTranslation(result);
+    setIsTranslating(false);
+  };
 
+  const hasUpvoted = currentUser ? comment.upvotes.includes(currentUser.id) : false;
+  const isBlocked = blockedUsers.includes(comment.userId);
+  const isUrgent = comment.sentiment?.label === 'Urgent' || comment.sentiment?.label === 'Negative';
+
+  if (isBlocked) {
     return (
-        <div className={`flex flex-col ${depth > 0 ? 'mt-4' : ''}`}>
-            <div 
-                className={`p-6 rounded-2xl border shadow-sm transition-all relative group ${
-                    comment.isOfficialResponse 
-                    ? 'bg-blue-50 border-blue-200' 
-                    : 'bg-white border-slate-200'
-                }`}
-            >
-                {/* Menu Dropdown */}
-                <div className="absolute top-4 right-4">
-                    <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-slate-400 hover:text-slate-600 p-1">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
-                    </button>
-                    {isMenuOpen && (
-                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 z-10 animate-fade-in">
-                            <button 
-                                onClick={() => { setIsMenuOpen(false); alert(`Reported comment by ${comment.userName}. We will review it shortly.`); }}
-                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
-                            >
-                                <Icons.AlertTriangle className="w-4 h-4 mr-2" />
-                                Report Content
-                            </button>
-                            <button 
-                                onClick={() => { setIsMenuOpen(false); onToggleBlock(comment.userId); }}
-                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center"
-                            >
-                                <Icons.Shield className="w-4 h-4 mr-2" />
-                                Block User
-                            </button>
-                        </div>
-                    )}
-                </div>
+      <div className="mt-4 opacity-50 bg-slate-100/30 p-4 rounded-3xl border border-dashed border-slate-200 text-xs text-slate-400 flex justify-between items-center italic">
+        <span>Content from blocked user hidden</span>
+        <button onClick={() => onToggleBlock(comment.userId)} className="not-italic font-black text-indigo-600 uppercase tracking-widest text-[9px]">Unblock</button>
+      </div>
+    );
+  }
 
-                <div className="flex gap-4">
-                    <div className="flex-shrink-0 relative">
-                        <img 
-                            src={comment.userAvatar} 
-                            alt={comment.userName} 
-                            className={`w-10 h-10 rounded-full border-2 object-cover ${
-                                comment.isOfficialResponse ? 'border-blue-200 ring-2 ring-blue-50' : 
-                                isTopContributor ? 'border-yellow-400 ring-2 ring-yellow-100' : 'border-slate-100'
-                            }`} 
-                        />
-                        {isTopContributor && !comment.isOfficialResponse && (
-                            <div className="absolute -bottom-1 -right-1 bg-yellow-400 text-white rounded-full p-0.5 border-2 border-white" title="Top Contributor">
-                                <Icons.Star className="w-3 h-3 fill-current" />
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-2 pr-8">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <span className={`font-bold text-sm ${comment.isOfficialResponse ? 'text-blue-900' : 'text-slate-900'}`}>
-                                    {comment.userName}
-                                </span>
-                                {comment.isOfficialResponse && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wide">
-                                        <Icons.CheckCircle className="w-3 h-3" />
-                                        Official
-                                    </span>
-                                )}
-                                {isTopContributor && !comment.isOfficialResponse && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-[10px] font-bold uppercase tracking-wide">
-                                        Top Contributor
-                                    </span>
-                                )}
-                                <span className="text-xs text-slate-400 font-medium">
-                                    • {new Date(comment.timestamp).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', month: 'short', day: 'numeric' })}
-                                </span>
-                            </div>
-                        </div>
+  return (
+    <div className={`flex flex-col ${depth > 0 ? 'mt-4' : 'mt-10'}`}>
+      <div className={`p-8 md:p-10 rounded-[2.5rem] transition-all relative border-2 ${
+        comment.isOfficialResponse 
+        ? 'bg-indigo-50/40 border-indigo-100 shadow-[0_30px_60px_-20px_rgba(79,70,229,0.1)]' 
+        : 'bg-white border-white shadow-[0_30px_70px_-25px_rgba(0,0,0,0.05)]'
+      }`}>
+        
+        <div className={`absolute top-10 bottom-10 left-0 w-1.5 rounded-r-full ${
+          isUrgent ? 'bg-red-500' : comment.isOfficialResponse ? 'bg-indigo-600' : 'bg-slate-200'
+        }`} />
 
-                        {/* Comment Content */}
-                        <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">
-                            {translation || comment.content}
-                        </div>
-                        
-                        {/* Sentiment & Translation Badges */}
-                        <div className="mt-2 flex gap-2">
-                             {comment.sentiment && (
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 ${
-                                    comment.sentiment.label === 'Negative' ? 'bg-red-50 border-red-100 text-red-600' : 
-                                    comment.sentiment.label === 'Positive' ? 'bg-green-50 border-green-100 text-green-600' :
-                                    comment.sentiment.label === 'Urgent' ? 'bg-red-100 border-red-200 text-red-700 font-bold' :
-                                    'bg-slate-50 border-slate-100 text-slate-500'
-                                }`}>
-                                    {comment.sentiment.label === 'Urgent' && <Icons.AlertTriangle className="w-2.5 h-2.5" />}
-                                    {comment.sentiment.label}
-                                </span>
-                             )}
-                             {translation && (
-                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center gap-1">
-                                     <Icons.Globe className="w-3 h-3" /> Translated
-                                 </span>
-                             )}
-                        </div>
+        <div className="absolute top-10 right-10 flex items-center gap-3">
+          {comment.reportedBy && comment.reportedBy.length > 0 && (
+            <Icons.AlertCircle className="w-5 h-5 text-red-500 animate-pulse" />
+          )}
+          <div className="relative">
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 text-slate-300 hover:text-slate-500 transition-colors">
+               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
+            </button>
+            {isMenuOpen && (
+              <div className="absolute right-0 mt-3 w-52 bg-white rounded-3xl shadow-[0_30px_80px_-15px_rgba(0,0,0,0.15)] border border-slate-50 py-3 z-50 animate-fade-in overflow-hidden">
+                <button onClick={() => { onToggleBlock(comment.userId); setIsMenuOpen(false); }} className="w-full text-left px-6 py-3 text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 flex items-center gap-3">
+                  <Icons.Shield className="w-4 h-4 opacity-40" /> Block User
+                </button>
+                <button onClick={() => { reportComment(complaintId, comment.id); setIsMenuOpen(false); }} className="w-full text-left px-6 py-3 text-xs font-black uppercase tracking-widest text-red-600 hover:bg-red-50 flex items-center gap-3">
+                  <Icons.Flag className="w-4 h-4 opacity-60" /> Report Post
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
-                        {/* Attachment */}
-                        {comment.attachmentUrl && (
-                            <div className="mt-3">
-                                <img 
-                                    src={comment.attachmentUrl} 
-                                    alt="Attachment" 
-                                    className="max-h-64 rounded-lg border border-slate-200 shadow-sm cursor-pointer hover:opacity-95"
-                                    onClick={() => window.open(comment.attachmentUrl, '_blank')}
-                                />
-                            </div>
-                        )}
-
-                        {/* Actions Footer */}
-                        <div className="mt-4 flex items-center gap-4 text-xs font-medium text-slate-500">
-                             <button 
-                                onClick={() => toggleCommentUpvote(complaintId, comment.id)}
-                                className={`flex items-center gap-1 hover:text-indigo-600 transition-colors ${hasUpvoted ? 'text-indigo-600' : ''}`}
-                             >
-                                 <Icons.ThumbsUp className={`w-3.5 h-3.5 ${hasUpvoted ? 'fill-current' : ''}`} />
-                                 {comment.upvotes.length || 'Helpful'}
-                             </button>
-                             <button 
-                                onClick={() => onReply(comment)}
-                                className="flex items-center gap-1 hover:text-indigo-600 transition-colors"
-                             >
-                                 <Icons.MessageSquare className="w-3.5 h-3.5" />
-                                 Reply
-                             </button>
-                             {/* Show translate if foreign or we don't know the language, but always keep the option available */}
-                             <button 
-                                onClick={handleTranslate}
-                                className={`flex items-center gap-1 transition-colors ${isForeign ? 'text-indigo-600 font-semibold' : 'hover:text-indigo-600'}`}
-                             >
-                                 <Icons.Globe className="w-3.5 h-3.5" />
-                                 {isTranslating ? 'Translating...' : translation ? 'Show Original' : (isForeign ? `Translate from ${comment.language}` : 'Translate')}
-                             </button>
-                        </div>
-                    </div>
-                </div>
+        <div className="flex gap-6 md:gap-8">
+          <div className="flex-shrink-0 relative">
+            <div className="w-16 h-16 md:w-20 md:h-20 rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white">
+              <img src={comment.userAvatar} alt={comment.userName} className="w-full h-full object-cover" />
+            </div>
+            {comment.isOfficialResponse && (
+               <div className="absolute -bottom-1 -right-1 bg-indigo-600 text-white p-1.5 rounded-xl shadow-lg border-2 border-white">
+                  <Icons.CheckCircle className="w-4 h-4" />
+               </div>
+            )}
+          </div>
+          
+          <div className="flex-1 min-w-0 pt-1">
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
+              <span className="text-xl font-black text-slate-900 tracking-tighter leading-none">{comment.userName}</span>
+              {comment.isOfficialResponse && (
+                <span className="px-3 py-1 rounded-full bg-indigo-600 text-white text-[9px] font-black uppercase tracking-[0.3em] shadow-lg shadow-indigo-100">
+                  Business Lead
+                </span>
+              )}
+              <span className="text-xs text-slate-300 font-bold uppercase tracking-widest ml-2">
+                {new Date(comment.timestamp).toLocaleDateString()}
+              </span>
             </div>
 
-            {/* Render Nested Replies */}
-            {comment.replies.length > 0 && (
-                <div className="ml-6 md:ml-12 border-l-2 border-slate-100 pl-4 md:pl-6">
-                    {comment.replies.map(reply => (
-                        <CommentNode 
-                            key={reply.id} 
-                            comment={reply} 
-                            complaintId={complaintId}
-                            depth={depth + 1} 
-                            topContributorId={topContributorId}
-                            onReply={onReply}
-                            blockedUsers={blockedUsers}
-                            onToggleBlock={onToggleBlock}
-                        />
-                    ))}
+            <div className={`text-slate-600 text-base md:text-lg leading-relaxed whitespace-pre-wrap font-medium tracking-tight ${translation ? 'italic text-indigo-900/60' : ''}`}>
+              {translation || comment.content}
+            </div>
+
+            {comment.sentiment?.summary && (
+              <div className={`mt-6 p-6 rounded-[2rem] border flex items-start gap-5 transition-all ${
+                isUrgent ? 'bg-red-50/50 border-red-100 text-red-700' : 'bg-slate-50/80 border-slate-100 text-slate-500'
+              }`}>
+                <Icons.Brain className={`w-5 h-5 mt-1 flex-shrink-0 ${isUrgent ? 'text-red-500 animate-pulse' : 'text-indigo-400'}`} />
+                <div className="text-[11px] font-bold leading-tight">
+                  <span className="uppercase tracking-[0.3em] block mb-1.5 opacity-40 text-[9px]">Neural Summary</span>
+                  {comment.sentiment.summary}
                 </div>
+              </div>
             )}
+            
+            <div className="mt-10 flex items-center gap-10 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+              <button onClick={() => toggleCommentUpvote(complaintId, comment.id)} className={`flex items-center gap-2.5 transition-all ${hasUpvoted ? 'text-indigo-600 scale-105' : 'hover:text-indigo-600 hover:-translate-y-0.5'}`}>
+                <Icons.ThumbsUp className={`w-5 h-5 ${hasUpvoted ? 'fill-current' : ''}`} />
+                {comment.upvotes.length || 'Relevant'}
+              </button>
+              <button onClick={() => onReply(comment)} className="flex items-center gap-2.5 hover:text-indigo-600 transition-all hover:-translate-y-0.5">
+                <Icons.MessageSquare className="w-5 h-5" /> Reply
+              </button>
+              {(comment.language && comment.language !== 'English') && (
+                <button onClick={handleTranslate} className="flex items-center gap-2.5 text-indigo-500 transition-all hover:opacity-70">
+                  <Icons.Globe className={`w-5 h-5 ${isTranslating ? 'animate-spin' : ''}`} />
+                  {translation ? 'Original' : 'Auto-Translate'}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-    );
+      </div>
+
+      {comment.replies.length > 0 && (
+        <div className="ml-12 md:ml-24 border-l-4 border-slate-100/50 pl-10 md:pl-20 relative">
+           <div className="absolute top-0 left-[-4px] h-14 w-1 bg-indigo-500/10 rounded-full" />
+          {comment.replies.map(reply => (
+            <CommentNode 
+              key={reply.id} 
+              comment={reply} 
+              complaintId={complaintId} 
+              onReply={onReply} 
+              blockedUsers={blockedUsers} 
+              onToggleBlock={onToggleBlock}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export const ComplaintDetail: React.FC<Props> = ({ complaint, onBack }) => {
-  const { currentUser, addComment, updateStatus, updateComplaint, complaints } = useApp();
-  const [newComment, setNewComment] = useState('');
-  const [isDrafting, setIsDrafting] = useState(false);
-  const [isPosting, setIsPosting] = useState(false);
-  const [attachedImage, setAttachedImage] = useState<string | null>(null);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const { currentUser, updateStatus, addComment } = useApp();
+  const [commentText, setCommentText] = useState('');
+  const [replyTo, setReplyTo] = useState<Comment | null>(null);
   const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
-  
-  // New State variables for requested features
-  const [manualSummary, setManualSummary] = useState<string | null>(null);
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [translatedDesc, setTranslatedDesc] = useState<string | null>(null);
-  const [isTranslatingDesc, setIsTranslatingDesc] = useState(false);
-  const [tagInput, setTagInput] = useState('');
-  
-  // Reply State
-  const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<'INSIGHTS' | 'HISTORY'>('INSIGHTS');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [attachment, setAttachment] = useState<string | null>(null);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Feature Logic: Related Complaints ---
-  const relatedComplaints = useMemo(() => {
-    // Split current title into keywords (simple space split)
-    const keywords = complaint.title.toLowerCase().split(' ').filter(word => word.length > 3);
-    
-    return complaints.filter(c => {
-        if (c.id === complaint.id) return false;
-        const targetText = (c.title + ' ' + c.description).toLowerCase();
-        // Check if any keyword matches
-        return keywords.some(keyword => targetText.includes(keyword));
-    }).slice(0, 3); // Limit to 3
-  }, [complaint, complaints]);
+  const isBusinessOwner = currentUser?.role === UserRole.BUSINESS && currentUser?.companyName === complaint.companyName;
+  const isAdmin = currentUser?.role === UserRole.ADMIN;
+  const isAssigned = complaint.status !== ComplaintStatus.OPEN;
 
-  // --- Feature Logic: Summary ---
-  const handleGenerateSummary = async () => {
-    setIsGeneratingSummary(true);
-    const sentiment = await analyzeSentiment(complaint.description);
-    setManualSummary(sentiment.summary);
-    // Persist this via updateComplaint if desired, but for now just local state for the button feedback
-    await updateComplaint(complaint.id, { sentiment });
-    setIsGeneratingSummary(false);
-  };
-
-  // --- Feature Logic: Translation ---
-  const handleTranslateDescription = async () => {
-    if (translatedDesc) {
-        setTranslatedDesc(null);
-        return;
-    }
-    setIsTranslatingDesc(true);
-    const result = await translateText(complaint.description, "Spanish");
-    setTranslatedDesc(result);
-    setIsTranslatingDesc(false);
-  };
-
-  // --- Feature Logic: Tags ---
-  const handleAddTag = async () => {
-      if (!tagInput.trim()) return;
-      const newTag = tagInput.trim().toLowerCase();
-      if (!complaint.tags.includes(newTag)) {
-          const updatedTags = [...(complaint.tags || []), newTag];
-          await updateComplaint(complaint.id, { tags: updatedTags });
-      }
-      setTagInput('');
-  };
-
-  const handleRemoveTag = async (tagToRemove: string) => {
-      const updatedTags = complaint.tags.filter(t => t !== tagToRemove);
-      await updateComplaint(complaint.id, { tags: updatedTags });
-  };
-
-
-  // Calculate Top Contributor
-  const topContributorId = useMemo(() => {
-      const userScores: Record<string, number> = {};
-      
-      const traverse = (comments: Comment[]) => {
-          comments.forEach(c => {
-              if (!c.isOfficialResponse) {
-                  userScores[c.userId] = (userScores[c.userId] || 0) + c.upvotes.length;
-              }
-              if (c.replies.length > 0) traverse(c.replies);
-          });
-      };
-      
-      traverse(complaint.comments);
-      
-      let maxScore = -1;
-      let topUser: string | null = null;
-      for (const [userId, score] of Object.entries(userScores)) {
-          if (score > maxScore && score > 0) {
-              maxScore = score;
-              topUser = userId;
-          }
-      }
-      return topUser;
-  }, [complaint.comments]);
-
-  const handleToggleBlock = (userId: string) => {
-    if (blockedUsers.includes(userId)) {
-        setBlockedUsers(prev => prev.filter(id => id !== userId));
-    } else {
-        if (window.confirm("Are you sure you want to block this user? Their comments will be hidden from your view.")) {
-            setBlockedUsers(prev => [...prev, userId]);
-        }
-    }
-  };
-
-  const handlePostComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newComment.trim() && !attachedImage) return;
-    
-    setIsPosting(true);
-
-    let commentSentiment = undefined;
-    if (newComment.trim()) {
-        try {
-            commentSentiment = await analyzeSentiment(newComment);
-        } catch (err) {
-            console.warn("Failed to analyze comment sentiment");
-        }
-    }
-
-    addComment(
-        complaint.id, 
-        newComment, 
-        attachedImage || undefined, 
-        replyingTo?.id,
-        commentSentiment
-    );
-    
-    setNewComment('');
-    setAttachedImage(null);
-    setShowEmojiPicker(false);
-    setReplyingTo(null);
-    setIsPosting(false);
-  };
-
-  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const text = e.target.value;
-    if (text.length <= MAX_COMMENT_LENGTH) {
-      setNewComment(text);
-    }
-  };
-
-  const handleAiDraft = async () => {
-    if (!currentUser?.companyName) return;
-    setIsDrafting(true);
-    const draft = await generateProfessionalResponse(complaint.description, currentUser.companyName);
-    setNewComment(draft.slice(0, MAX_COMMENT_LENGTH));
-    setIsDrafting(false);
-  };
-
-  // Rich Text Helpers
-  const insertFormatting = (prefix: string, suffix: string) => {
+  const handleRichText = (tag: 'B' | 'I' | 'L') => {
     if (!textareaRef.current) return;
     const start = textareaRef.current.selectionStart;
     const end = textareaRef.current.selectionEnd;
-    const text = newComment;
-    const before = text.substring(0, start);
-    const selection = text.substring(start, end);
-    const after = text.substring(end);
-
-    const newText = `${before}${prefix}${selection}${suffix}${after}`;
-    if (newText.length <= MAX_COMMENT_LENGTH) {
-        setNewComment(newText);
-        setTimeout(() => {
-            textareaRef.current?.focus();
-            textareaRef.current?.setSelectionRange(start + prefix.length, end + prefix.length);
-        }, 0);
-    }
+    const selected = commentText.substring(start, end);
+    let updated = '';
+    if (tag === 'B') updated = `**${selected}**`;
+    else if (tag === 'I') updated = `*${selected}*`;
+    else if (tag === 'L') updated = `\n- ${selected}`;
+    setCommentText(commentText.substring(0, start) + updated + commentText.substring(end));
+    textareaRef.current.focus();
   };
 
-  const handleInsertLink = () => {
-    const url = window.prompt('Enter URL:', 'https://');
-    if (url) {
-      insertFormatting('[', `](${url})`);
-    }
+  const handlePostComment = async () => {
+    if (!commentText.trim()) return;
+    setIsProcessing(true);
+    const sentiment = await analyzeSentiment(commentText);
+    addComment(complaint.id, commentText, attachment || undefined, replyTo?.id, sentiment);
+    setCommentText('');
+    setReplyTo(null);
+    setAttachment(null);
+    setIsProcessing(false);
   };
 
-  const handleEmojiClick = (emoji: string) => {
-    if (!textareaRef.current) return;
-    const start = textareaRef.current.selectionStart;
-    const end = textareaRef.current.selectionEnd;
-    const text = newComment;
-    const before = text.substring(0, start);
-    const after = text.substring(end);
-
-    const newText = `${before}${emoji}${after}`;
-    if (newText.length <= MAX_COMMENT_LENGTH) {
-        setNewComment(newText);
-        setTimeout(() => {
-            textareaRef.current?.focus();
-            textareaRef.current?.setSelectionRange(start + emoji.length, start + emoji.length);
-        }, 0);
-    }
-    setShowEmojiPicker(false);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files[0]) {
-          const file = e.target.files[0];
-          const url = URL.createObjectURL(file);
-          setAttachedImage(url);
-      }
-  };
-
-  const isBusinessOwner = currentUser?.role === UserRole.BUSINESS && currentUser.companyName === complaint.companyName;
-  const charsRemaining = MAX_COMMENT_LENGTH - newComment.length;
-  const isNearLimit = charsRemaining <= 50;
+  const charPercent = (commentText.length / MAX_COMMENT_LENGTH) * 100;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <button 
-        onClick={onBack} 
-        className="mb-8 flex items-center text-slate-500 hover:text-slate-900 font-medium transition-colors group"
-      >
-        <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center mr-3 group-hover:border-slate-300 shadow-sm">
-             <Icons.LogOut className="w-4 h-4 rotate-180" /> 
+    <div className="animate-fade-in max-w-[1440px] mx-auto pb-48 lg:pt-8 px-6 md:px-12 bg-slate-50 min-h-screen">
+      
+      <button onClick={onBack} className="group mb-12 flex items-center gap-5 text-slate-400 hover:text-indigo-600 transition-all font-black uppercase text-[11px] tracking-[0.5em]">
+        <div className="w-14 h-14 rounded-[1.8rem] bg-white border-2 border-slate-50 flex items-center justify-center group-hover:bg-indigo-50 group-hover:border-indigo-100 transition-all shadow-xl">
+          <Icons.LogOut className="w-6 h-6 rotate-180" />
         </div>
-        Back to Community Feed
+        Return to Feed
       </button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Main Content Column */}
-        <div className="lg:col-span-8 space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr,420px] gap-12 items-start">
+        
+        <div className="space-y-12">
           
-          {/* Main Complaint Card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            {/* Header Section */}
-            <div className="p-8 border-b border-slate-100">
-               <div className="flex items-start justify-between gap-4 mb-4">
-                  <div className="flex items-center gap-4">
-                     <div className="relative">
-                        <div className="w-14 h-14 bg-gradient-to-br from-indigo-100 to-white rounded-full flex items-center justify-center text-indigo-700 font-bold text-xl ring-4 ring-slate-50 shadow-sm">
-                            {complaint.authorName.charAt(0)}
-                        </div>
-                        {complaint.sentiment?.label === 'Urgent' && (
-                            <div className="absolute -bottom-1 -right-1 bg-red-500 rounded-full p-1 border-2 border-white" title="Urgent">
-                                <Icons.AlertTriangle className="w-3 h-3 text-white" />
-                            </div>
-                        )}
-                     </div>
-                     <div>
-                        <div className="flex items-center gap-3">
-                            <h1 className="text-2xl font-bold text-slate-900 leading-tight mb-1">{complaint.title}</h1>
-                        </div>
-                        <div className="flex items-center text-sm text-slate-500">
-                            <span className="font-semibold text-slate-900">{complaint.authorName}</span>
-                            <span className="mx-2 text-slate-300">•</span>
-                            <span>{new Date(complaint.createdAt).toLocaleDateString()}</span>
-                            <span className="mx-2 text-slate-300">•</span>
-                            <span className="text-indigo-600 font-medium bg-indigo-50 px-2 py-0.5 rounded-full text-xs">
-                                {complaint.category}
-                            </span>
-                        </div>
-                     </div>
+          <div className="bg-white rounded-[3.5rem] shadow-[0_40px_100px_-30px_rgba(0,0,0,0.06)] border border-white overflow-hidden">
+            <div className="p-10 md:p-20">
+              <div className="flex flex-wrap items-center gap-4 mb-12">
+                <div className="px-6 py-2.5 rounded-2xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-[0.3em] shadow-2xl">
+                  {complaint.category}
+                </div>
+                <div className="text-[11px] font-black text-slate-300 uppercase tracking-[0.5em] ml-4">
+                   Ticket Ref: {complaint.id.slice(1, 9)}
+                </div>
+                {complaint.sentiment?.label === 'Urgent' && (
+                  <div className="ml-auto px-6 py-2.5 rounded-2xl bg-red-100 text-red-600 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">
+                    Urgent Response Needed
                   </div>
-               </div>
-               
-               {/* New Header Buttons Row */}
-               <div className="flex items-center gap-2 mt-4">
-                   <button 
-                     onClick={handleGenerateSummary}
-                     disabled={isGeneratingSummary}
-                     className="text-xs bg-purple-50 text-purple-700 px-3 py-1.5 rounded-lg font-semibold hover:bg-purple-100 transition-colors flex items-center border border-purple-100"
-                   >
-                       {isGeneratingSummary ? <Icons.Activity className="w-3 h-3 animate-spin mr-1"/> : <Icons.Activity className="w-3 h-3 mr-1"/>}
-                       AI Summary
-                   </button>
-                   <button 
-                     onClick={handleTranslateDescription}
-                     disabled={isTranslatingDesc}
-                     className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg font-semibold hover:bg-indigo-100 transition-colors flex items-center border border-indigo-100"
-                   >
-                       {isTranslatingDesc ? <Icons.Activity className="w-3 h-3 animate-spin mr-1"/> : <Icons.Globe className="w-3 h-3 mr-1"/>}
-                       {translatedDesc ? 'Show Original' : 'Translate'}
-                   </button>
-               </div>
-
-               {/* AI Summary Section */}
-               {(manualSummary || complaint.sentiment?.summary) && (
-                   <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-white rounded-lg border border-purple-100 text-sm text-slate-700 flex gap-3 animate-fade-in">
-                       <div className="mt-0.5"><Icons.Activity className="w-4 h-4 text-purple-600" /></div>
-                       <p><strong>Summary:</strong> {manualSummary || complaint.sentiment?.summary}</p>
-                   </div>
-               )}
-            </div>
-            
-            {/* Body Section */}
-            <div className="p-8">
-              <div className="prose prose-slate max-w-none mb-6 text-lg text-slate-700 leading-relaxed">
-                 {translatedDesc || complaint.description}
+                )}
               </div>
 
-              {/* Tags Section */}
-              <div className="mb-6">
-                 <div className="flex flex-wrap items-center gap-2">
-                     {(complaint.tags || []).map(tag => (
-                         <span key={tag} className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200 flex items-center">
-                             #{tag}
-                             {(currentUser?.id === complaint.authorId || currentUser?.role === UserRole.ADMIN) && (
-                                 <button onClick={() => handleRemoveTag(tag)} className="ml-2 hover:text-red-500">×</button>
-                             )}
-                         </span>
-                     ))}
-                     
-                     {(currentUser?.id === complaint.authorId || currentUser?.role === UserRole.ADMIN) && (
-                         <div className="flex items-center">
-                             <input 
-                               type="text" 
-                               value={tagInput}
-                               onChange={(e) => setTagInput(e.target.value)}
-                               onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
-                               placeholder="+ Tag"
-                               className="px-3 py-1 text-xs border border-slate-300 rounded-l-full w-20 focus:w-32 transition-all outline-none focus:border-indigo-500"
-                             />
-                             <button 
-                               onClick={handleAddTag} 
-                               className="px-2 py-1 bg-slate-100 border-y border-r border-slate-300 rounded-r-full text-xs hover:bg-slate-200"
-                             >
-                                 +
-                             </button>
+              <h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-slate-900 leading-[0.95] tracking-tighter mb-12">
+                {complaint.title}
+              </h1>
+
+              <div className="relative mb-16">
+                <div className="absolute -left-12 top-0 bottom-0 w-2.5 bg-indigo-500/10 rounded-full" />
+                <p className="text-slate-600 text-xl md:text-3xl font-medium leading-[1.5] whitespace-pre-wrap max-w-5xl tracking-tight">
+                  {complaint.description}
+                </p>
+              </div>
+
+              {/* Private / Required Information Section (Admin & Assigned Business Only) */}
+              {(isAdmin || (isBusinessOwner && isAssigned)) && complaint.privateDetails && Object.keys(complaint.privateDetails).length > 0 && (
+                <div className="mb-16 p-10 bg-indigo-950 rounded-[3rem] text-white shadow-2xl animate-fade-in relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-8 opacity-10">
+                    <Icons.Shield className="w-40 h-40" />
+                  </div>
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-4 mb-8">
+                       <div className="w-12 h-12 rounded-2xl bg-indigo-500 flex items-center justify-center">
+                         <Icons.List className="w-6 h-6" />
+                       </div>
+                       <h3 className="text-xl font-black uppercase tracking-widest">Required Information</h3>
+                    </div>
+                    <div className="p-6 bg-white/10 backdrop-blur-xl border border-white/20 rounded-[2rem] mb-8">
+                       <p className="text-sm font-bold text-indigo-200 flex items-center gap-3">
+                         <Icons.AlertCircle className="w-5 h-5 flex-shrink-0" />
+                         Notice: The information shared in this section is only visible to the admin and business and would not be shared on the frontend feed.
+                       </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                       {Object.entries(complaint.privateDetails).map(([key, value]) => (
+                         <div key={key} className="space-y-2">
+                           <label className="text-[10px] font-black uppercase tracking-widest text-indigo-400">{key}</label>
+                           <div className="text-lg font-bold">{value}</div>
                          </div>
-                     )}
-                 </div>
-              </div>
-
-              {complaint.sentiment && (
-                  <div className="bg-gradient-to-r from-slate-50 to-white p-5 rounded-xl border border-slate-100 flex items-start gap-4">
-                      <div className={`p-2 rounded-lg ${complaint.sentiment.label === 'Urgent' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
-                          <Icons.Activity className="w-5 h-5" />
-                      </div>
-                      <div>
-                          <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-1">
-                              AI Analysis: {complaint.sentiment.label}
-                          </h4>
-                          <p className="text-sm text-slate-600 italic leading-relaxed">
-                              "{complaint.sentiment.summary}"
-                          </p>
-                      </div>
+                       ))}
+                    </div>
                   </div>
+                </div>
               )}
+
+              <div className="flex items-center gap-6 p-8 rounded-[2.5rem] bg-slate-50/50 border border-slate-100 shadow-inner">
+                <div className="w-16 h-16 rounded-[1.8rem] bg-indigo-600 flex items-center justify-center text-white shadow-2xl">
+                   <Icons.Activity className="w-8 h-8" />
+                </div>
+                <div>
+                   <div className="text-lg font-black text-slate-900 uppercase tracking-tighter leading-none mb-1">Collaborative Status</div>
+                   <div className="text-sm font-bold text-slate-400">Public resolution path is active with community oversight</div>
+                </div>
+              </div>
             </div>
           </div>
-          
-           {/* Related Complaints Section */}
-           {relatedComplaints.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                 <h3 className="text-lg font-bold text-slate-900 mb-4">Related Complaints</h3>
-                 <div className="grid gap-4">
-                    {relatedComplaints.map(related => (
-                        <div key={related.id} className="p-4 rounded-lg bg-slate-50 border border-slate-100 hover:border-indigo-200 transition-colors">
-                            <h4 className="font-semibold text-slate-900 text-sm mb-1">{related.title}</h4>
-                            <p className="text-xs text-slate-500 line-clamp-1">{related.description}</p>
-                            <div className="mt-2 text-xs font-medium text-indigo-600">{related.companyName}</div>
-                        </div>
-                    ))}
-                 </div>
-              </div>
-           )}
 
-          {/* Discussion Section */}
-          <div className="bg-transparent space-y-6">
-             <div className="flex items-center justify-between px-2">
-                <h3 className="text-lg font-bold text-slate-900 flex items-center">
-                   Discussion
-                   <span className="ml-3 bg-white text-indigo-600 border border-indigo-100 px-2.5 py-0.5 rounded-full text-xs font-bold shadow-sm">
-                      {complaint.comments.reduce((acc, c) => acc + 1 + c.replies.length, 0)}
-                   </span>
-                </h3>
-             </div>
-            
-            <div className="space-y-6">
-              {complaint.comments.map(comment => (
+          <div className="space-y-10">
+            <div className="flex items-center justify-between px-6">
+               <h3 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter flex items-center gap-5">
+                 Community Feed <span className="text-indigo-100 text-2xl font-black tracking-widest">/ {complaint.comments.length}</span>
+               </h3>
+               <div className="hidden md:flex items-center gap-3">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300">Synchronized</span>
+               </div>
+            </div>
+
+            {complaint.comments.length === 0 ? (
+               <div className="bg-white rounded-[3.5rem] p-32 text-center border-2 border-dashed border-slate-100 flex flex-col items-center">
+                  <div className="bg-indigo-50/50 w-28 h-28 rounded-[2rem] flex items-center justify-center mb-8">
+                     <Icons.MessageSquare className="w-12 h-12 text-indigo-200" />
+                  </div>
+                  <h4 className="text-2xl font-black text-slate-300 uppercase tracking-[0.2em]">Start the conversation</h4>
+                  <p className="text-slate-400 text-base mt-3 font-bold max-w-sm">Help the community by providing your insight or asking for clarification.</p>
+               </div>
+            ) : (
+              <div className="space-y-4">
+                {complaint.comments.map(comment => (
                   <CommentNode 
                     key={comment.id} 
                     comment={comment} 
-                    complaintId={complaint.id}
-                    topContributorId={topContributorId}
-                    onReply={(c) => {
-                        setReplyingTo(c);
-                        setTimeout(() => textareaRef.current?.focus(), 100);
-                    }}
-                    blockedUsers={blockedUsers}
-                    onToggleBlock={handleToggleBlock}
+                    complaintId={complaint.id} 
+                    onReply={setReplyTo} 
+                    blockedUsers={blockedUsers} 
+                    onToggleBlock={u => setBlockedUsers(p => p.includes(u) ? p.filter(x => x !== u) : [...p, u])}
                   />
-              ))}
-              
-              {complaint.comments.length === 0 && (
-                <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 border-dashed">
-                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Icons.MessageSquare className="w-8 h-8 text-slate-300" />
-                    </div>
-                    <h4 className="text-slate-900 font-medium mb-1">No comments yet</h4>
-                    <p className="text-slate-500 text-sm">Be the first to join the discussion.</p>
-                </div>
-              )}
-            </div>
-
-            {/* Rich Text Comment Composer */}
-            <div className="p-1 bg-transparent sticky bottom-6 z-30">
-               {replyingTo && (
-                   <div className="mb-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm flex items-center justify-between shadow-lg">
-                       <span className="font-medium">Replying to {replyingTo.userName}...</span>
-                       <button onClick={() => setReplyingTo(null)} className="hover:text-indigo-200"><Icons.LogOut className="w-4 h-4" /></button>
-                   </div>
-               )}
-
-               {isBusinessOwner && !newComment && !replyingTo && (
-                   <button 
-                      onClick={handleAiDraft}
-                      disabled={isDrafting}
-                      className="mb-6 group flex items-center gap-3 w-full p-4 bg-white border border-indigo-100 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all text-left"
-                   >
-                       <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                           <Icons.Activity className={`w-5 h-5 ${isDrafting ? 'animate-spin' : ''}`} />
-                       </div>
-                       <div>
-                           <div className="font-semibold text-slate-900 text-sm">
-                               {isDrafting ? 'Generating...' : 'Generate Professional Response'}
-                           </div>
-                           <div className="text-xs text-slate-500">
-                               Use AI to draft a polite and effective reply based on the complaint context.
-                           </div>
-                       </div>
-                   </button>
-               )}
-              
-              <div className={`rounded-xl shadow-lg bg-white ring-1 transition-all duration-300 ${
-                  isNearLimit 
-                      ? 'ring-2 ring-red-500' 
-                      : 'ring-slate-200 focus-within:ring-2 focus-within:ring-indigo-500'
-              }`}>
-                 {/* Formatting Toolbar */}
-                 <div className="flex items-center gap-1 p-2 border-b border-slate-100 bg-slate-50/30 rounded-t-xl overflow-x-auto">
-                    <button type="button" onClick={() => insertFormatting('**', '**')} className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="Bold">
-                        <Icons.Bold className="w-4 h-4" />
-                    </button>
-                    <button type="button" onClick={() => insertFormatting('*', '*')} className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="Italic">
-                        <Icons.Italic className="w-4 h-4" />
-                    </button>
-                    <div className="w-px h-4 bg-slate-200 mx-1"></div>
-                    <button type="button" onClick={handleInsertLink} className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="Link">
-                        <Icons.Link className="w-4 h-4" />
-                    </button>
-                    <button type="button" onClick={() => insertFormatting('- ', '')} className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="Bulleted List">
-                        <Icons.List className="w-4 h-4" />
-                    </button>
-                    <div className="w-px h-4 bg-slate-200 mx-1"></div>
-                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="Insert Image">
-                        <Icons.Image className="w-4 h-4" />
-                    </button>
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        className="hidden" 
-                        accept="image/*" 
-                        onChange={handleFileSelect}
-                    />
-                 </div>
-
-                 <textarea 
-                   ref={textareaRef}
-                   value={newComment}
-                   onChange={handleCommentChange}
-                   placeholder={replyingTo ? `Reply to ${replyingTo.userName}...` : "Write a thoughtful comment..."}
-                   className="block w-full border-0 bg-transparent py-4 pl-4 pr-4 text-slate-900 placeholder:text-slate-400 focus:ring-0 sm:text-sm sm:leading-6 min-h-[120px] resize-y"
-                 />
-                 
-                 {/* Image Preview Area */}
-                 {attachedImage && (
-                     <div className="px-4 pb-4">
-                         <div className="relative inline-block">
-                             <img src={attachedImage} alt="Preview" className="h-20 w-auto rounded-lg border border-slate-200 shadow-sm" />
-                             <button 
-                                onClick={() => setAttachedImage(null)}
-                                className="absolute -top-2 -right-2 bg-slate-900 text-white rounded-full p-1 hover:bg-red-500 transition-colors shadow-sm"
-                             >
-                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                             </button>
-                         </div>
-                     </div>
-                 )}
-
-                 <div className={`flex items-center justify-between py-2 pl-3 pr-2 border-t rounded-b-xl ${
-                      isNearLimit ? 'bg-red-50 border-red-100' : 'bg-slate-50/50 border-slate-100'
-                  }`}>
-                      <div className="flex items-center gap-4">
-                          <div className={`text-xs font-medium transition-colors flex items-center gap-2 ${
-                            isNearLimit ? 'text-red-600' : 'text-slate-400'
-                          }`}>
-                            {isNearLimit && <Icons.AlertTriangle className="w-3.5 h-3.5" />}
-                            {charsRemaining} characters left
-                          </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 relative">
-                        {/* Additional Action Buttons */}
-                        <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors" title="Attach File">
-                            <Icons.Paperclip className="w-4 h-4" />
-                        </button>
-                        
-                        <div className="relative">
-                            <button 
-                                type="button" 
-                                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                                className="p-2 text-slate-400 hover:text-yellow-500 hover:bg-yellow-50 rounded-full transition-colors" 
-                                title="Insert Emoji"
-                            >
-                                <Icons.Smile className="w-4 h-4" />
-                            </button>
-                            {showEmojiPicker && (
-                                <div className="absolute bottom-full right-0 mb-2 p-3 bg-white rounded-lg shadow-xl border border-slate-200 grid grid-cols-5 gap-2 z-20 w-64 animate-fade-in-up">
-                                    {EMOJIS.map(emoji => (
-                                        <button
-                                            key={emoji}
-                                            type="button"
-                                            onClick={() => handleEmojiClick(emoji)}
-                                            className="p-2 hover:bg-slate-100 rounded text-xl flex items-center justify-center transition-colors"
-                                        >
-                                            {emoji}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <button 
-                          onClick={handlePostComment}
-                          disabled={(!newComment.trim() && !attachedImage) || isPosting}
-                          className="ml-2 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                        >
-                          {isPosting ? <Icons.Activity className="w-4 h-4 animate-spin" /> : <Icons.MessageSquare className="w-4 h-4" />}
-                          {replyingTo ? 'Reply' : 'Post'}
-                        </button>
-                      </div>
-                  </div>
-                </div>
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Sidebar Column */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 sticky top-24">
-             <div className="flex items-center justify-between mb-6">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Details</h3>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                     complaint.status === ComplaintStatus.OPEN ? 'bg-yellow-100 text-yellow-800' :
-                     complaint.status === ComplaintStatus.RESOLVED ? 'bg-green-100 text-green-800' :
-                     'bg-blue-100 text-blue-800'
-                 }`}>
-                     {complaint.status}
-                 </span>
-             </div>
-             
-             <div className="space-y-6">
-               <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-xl">
-                   <div className="mt-1 bg-white p-2 rounded-lg border border-slate-100 shadow-sm text-slate-600">
-                        <Icons.Briefcase className="w-5 h-5" />
-                   </div>
-                   <div>
-                       <span className="text-xs font-semibold text-slate-500 uppercase">Company</span>
-                       <div className="font-bold text-slate-900 text-lg">{complaint.companyName}</div>
-                   </div>
-               </div>
-               
-               <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-xl">
-                   <div className="mt-1 bg-white p-2 rounded-lg border border-slate-100 shadow-sm text-slate-600">
-                        <Icons.Shield className="w-5 h-5" />
-                   </div>
-                   <div>
-                       <span className="text-xs font-semibold text-slate-500 uppercase">Industry</span>
-                       <div className="font-medium text-slate-900">{complaint.category}</div>
-                   </div>
-               </div>
+        <div className="space-y-12 sticky top-12">
+          
+          <div className="bg-white rounded-[3.5rem] shadow-[0_40px_80px_-25px_rgba(0,0,0,0.04)] border border-white overflow-hidden">
+            <div className="flex p-4 bg-slate-50/50 border-b border-slate-100 gap-3">
+              <button onClick={() => setSidebarTab('INSIGHTS')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-[0.4em] rounded-[1.8rem] transition-all ${sidebarTab === 'INSIGHTS' ? 'bg-white text-indigo-600 shadow-xl' : 'text-slate-400 hover:text-slate-600'}`}>Insights</button>
+              <button onClick={() => setSidebarTab('HISTORY')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-[0.4em] rounded-[1.8rem] transition-all ${sidebarTab === 'HISTORY' ? 'bg-white text-indigo-600 shadow-xl' : 'text-slate-400 hover:text-slate-600'}`}>Timeline</button>
+            </div>
 
-               {/* History Section */}
-               {(complaint.history || []).length > 0 && (
-                   <div className="p-4 bg-slate-50 rounded-xl">
-                       <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center">
-                           <Icons.Activity className="w-3 h-3 mr-1" /> History
-                       </h4>
-                       <div className="space-y-3 relative before:absolute before:left-1.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
-                           {complaint.history.map((h, idx) => (
-                               <div key={idx} className="relative pl-5">
-                                   <div className="absolute left-0 top-1.5 w-3.5 h-3.5 bg-white border-2 border-slate-300 rounded-full"></div>
-                                   <div className="text-xs font-semibold text-slate-800">{h.status.replace('_', ' ')}</div>
-                                   <div className="text-[10px] text-slate-400">{new Date(h.timestamp).toLocaleString()}</div>
-                               </div>
-                           ))}
-                       </div>
-                   </div>
-               )}
-             </div>
-
-             {/* Business Actions */}
-             {isBusinessOwner && (
-               <div className="mt-8 pt-6 border-t border-slate-100">
-                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">Manage Ticket</h3>
-                  <div className="space-y-3">
-                     {complaint.status !== ComplaintStatus.RESOLVED && (
-                        <button 
-                           onClick={() => updateStatus(complaint.id, ComplaintStatus.RESOLVED)}
-                           className="w-full py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 shadow-md shadow-green-100 transition-all flex items-center justify-center gap-2"
-                        >
-                            <Icons.CheckCircle className="w-4 h-4" />
-                            Mark as Resolved
-                        </button>
-                     )}
-                     {complaint.status === ComplaintStatus.OPEN && (
-                        <button 
-                           onClick={() => updateStatus(complaint.id, ComplaintStatus.IN_PROGRESS)}
-                           className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 shadow-md shadow-blue-100 transition-all flex items-center justify-center gap-2"
-                        >
-                            <Icons.Activity className="w-4 h-4" />
-                            Mark In Progress
-                        </button>
-                     )}
+            <div className="p-10">
+              {sidebarTab === 'INSIGHTS' ? (
+                <div className="space-y-12 animate-fade-in">
+                  <div className="flex flex-col gap-4">
+                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em]">Target Brand</span>
+                    <div className="flex items-center gap-6 group cursor-pointer">
+                      <div className="w-16 h-16 rounded-[1.8rem] bg-slate-900 flex items-center justify-center text-white shadow-2xl transition-all group-hover:scale-110 duration-500">
+                         <Icons.Briefcase className="w-8 h-8" />
+                      </div>
+                      <div>
+                        <div className="text-2xl font-black text-slate-900 tracking-tighter leading-none mb-1">{complaint.companyName}</div>
+                        <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Partner Network</div>
+                      </div>
+                    </div>
                   </div>
+
+                  <div className="flex flex-col gap-4 pt-10 border-t border-slate-100">
+                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em]">Platform Health</span>
+                    <div className={`text-5xl font-black uppercase tracking-tighter leading-none ${
+                      complaint.status === ComplaintStatus.RESOLVED ? 'text-emerald-500' : 'text-indigo-600'
+                    }`}>
+                      {complaint.status.replace('_', ' ')}
+                    </div>
+                  </div>
+
+                  {isBusinessOwner && (
+                    <div className="pt-10 border-t border-slate-100 grid grid-cols-1 gap-4">
+                      <button onClick={() => updateStatus(complaint.id, ComplaintStatus.IN_PROGRESS)} className="w-full py-6 bg-slate-950 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all">Escalate Tier</button>
+                      <button onClick={() => updateStatus(complaint.id, ComplaintStatus.RESOLVED)} className="w-full py-6 bg-emerald-500 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.3em] shadow-2xl shadow-emerald-200 active:scale-95 transition-all">Verify Resolution</button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-14 animate-fade-in relative pl-10 border-l-4 border-slate-100 py-6 ml-4">
+                   {complaint.history.map((entry, idx) => (
+                    <div key={idx} className="relative group">
+                      <div className="absolute -left-[54px] top-1.5 w-8 h-8 rounded-[1.3rem] border-[6px] border-white bg-indigo-600 shadow-2xl group-hover:scale-125 transition-transform z-10" />
+                      <div className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] mb-1">{entry.status.replace('_', ' ')}</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">{new Date(entry.timestamp).toLocaleDateString()} at {new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-slate-950 rounded-[3.5rem] p-12 text-white shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] relative overflow-hidden group">
+            <div className="absolute -top-16 -right-16 p-4 opacity-10 group-hover:opacity-20 transition-all duration-[2000ms]">
+               <Icons.Brain className="w-80 h-80 rotate-12" />
+            </div>
+            <div className="relative z-10">
+               <div className="flex items-center gap-4 mb-10">
+                  <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-3xl flex items-center justify-center border border-white/20">
+                     <Icons.Zap className="w-7 h-7 text-indigo-400" />
+                  </div>
+                  <h4 className="text-[11px] font-black uppercase tracking-[0.6em] text-indigo-400">Neural Sync</h4>
                </div>
-             )}
+               <p className="text-white text-3xl font-black italic leading-[1.2] mb-12 tracking-tight">
+                 "{complaint.sentiment?.summary || 'Scanning linguistic patterns...'}"
+               </p>
+               <div className="flex items-center justify-between pt-10 border-t border-white/10">
+                  <div className="text-[9px] font-black uppercase tracking-[0.5em] text-indigo-300/60">kwibl Engine 3.1-PRO</div>
+                  <Icons.Shield className="w-6 h-6 text-white/20" />
+               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-[100] px-6 pb-10 md:pb-16 pointer-events-none">
+        <div className="max-w-5xl mx-auto w-full pointer-events-auto">
+          <div className="bg-white/90 backdrop-blur-3xl rounded-[3.5rem] border border-white shadow-[0_60px_120px_-30px_rgba(0,0,0,0.3)] overflow-hidden transition-all hover:shadow-[0_70px_130px_-35px_rgba(0,0,0,0.35)] ring-1 ring-slate-200/50">
+            {replyTo && (
+              <div className="flex items-center justify-between bg-indigo-600 px-10 py-5 text-white animate-fade-in shadow-xl">
+                <div className="flex items-center gap-5">
+                  <img src={replyTo.userAvatar} className="w-10 h-10 rounded-[1.3rem] border-2 border-white/20 object-cover shadow-2xl" alt="Avatar" />
+                  <span className="text-xs font-black uppercase tracking-[0.4em]">Replying to {replyTo.userName}</span>
+                </div>
+                <button onClick={() => setReplyTo(null)} className="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-2xl transition-all"><Icons.LogOut className="w-5 h-5 rotate-45" /></button>
+              </div>
+            )}
+            
+            <div className="p-4 px-10 border-b border-slate-100 flex items-center gap-3 bg-slate-50/30">
+              <button onClick={() => handleRichText('B')} className="p-4 hover:bg-white rounded-2xl hover:shadow-2xl transition-all text-slate-400 hover:text-indigo-600"><Icons.Bold className="w-5 h-5" /></button>
+              <button onClick={() => handleRichText('I')} className="p-4 hover:bg-white rounded-2xl hover:shadow-2xl transition-all text-slate-400 hover:text-indigo-600"><Icons.Italic className="w-5 h-5" /></button>
+              <button onClick={() => handleRichText('L')} className="p-4 hover:bg-white rounded-2xl hover:shadow-2xl transition-all text-slate-400 hover:text-indigo-600"><Icons.List className="w-5 h-5" /></button>
+              <div className="w-px h-8 bg-slate-200/50 mx-3" />
+              <div className="relative">
+                <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-4 hover:bg-white rounded-2xl hover:shadow-2xl transition-all text-slate-400 hover:text-indigo-600"><Icons.Smile className="w-5 h-5" /></button>
+                {showEmojiPicker && (
+                  <div className="absolute bottom-24 left-0 bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] p-8 grid grid-cols-5 gap-5 z-50 border border-slate-50 animate-fade-in">
+                    {COMMON_EMOJIS.map(e => (
+                      <button key={e} onClick={() => { setCommentText(prev => prev + e); setShowEmojiPicker(false); }} className="hover:scale-125 transition-transform p-1 text-3xl">{e}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => fileInputRef.current?.click()} className="p-4 hover:bg-white rounded-2xl hover:shadow-2xl transition-all text-slate-400 hover:text-indigo-600"><Icons.Image className="w-5 h-5" /></button>
+              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => { if(e.target.files?.[0]) { const r = new FileReader(); r.onloadend = () => setAttachment(r.result as string); r.readAsDataURL(e.target.files[0]); }}} />
+              
+              {isBusinessOwner && (
+                <button onClick={async () => { setIsProcessing(true); setCommentText(await generateProfessionalResponse(complaint.description, complaint.companyName)); setIsProcessing(false); }} className="ml-auto text-[10px] font-black uppercase tracking-[0.3em] text-indigo-600 flex items-center gap-3 bg-indigo-50/80 px-6 py-3 rounded-2xl border border-indigo-100 hover:bg-indigo-100 transition-all shadow-lg">
+                  <Icons.Brain className={`w-5 h-5 ${isProcessing ? 'animate-spin' : ''}`} /> AI Smart Draft
+                </button>
+              )}
+            </div>
+
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                className="w-full px-10 py-10 md:py-12 bg-transparent border-none focus:ring-0 transition-all resize-none text-slate-900 font-black placeholder:text-slate-300 min-h-[160px] text-xl md:text-3xl tracking-tighter leading-tight"
+                placeholder={replyTo ? `Draft response...` : "Update the community..."}
+                maxLength={MAX_COMMENT_LENGTH}
+              />
+              
+              <div className="absolute bottom-10 right-10 flex items-center gap-10">
+                <div className="flex flex-col items-end gap-2">
+                  <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                    <div className={`h-full transition-all duration-500 ${charPercent > 90 ? 'bg-red-500' : 'bg-indigo-600'}`} style={{ width: `${charPercent}%` }}></div>
+                  </div>
+                </div>
+                <button 
+                  onClick={handlePostComment}
+                  disabled={!commentText.trim() || isProcessing}
+                  className="bg-slate-950 text-white px-12 md:px-16 py-5 md:py-6 rounded-[2.5rem] font-black text-xs md:text-sm uppercase tracking-[0.4em] hover:bg-black disabled:opacity-30 transition-all shadow-[0_30px_60px_-15px_rgba(0,0,0,0.4)] active:scale-95 flex items-center gap-4 group"
+                >
+                  {isProcessing ? <Icons.Activity className="w-6 h-6 animate-spin" /> : (replyTo ? 'Reply Post' : 'Share Post')}
+                  {!isProcessing && <Icons.Plus className="w-6 h-6 group-hover:rotate-90 transition-transform" />}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

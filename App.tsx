@@ -3,11 +3,19 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Layout } from './components/Layout';
 import { LandingPage } from './pages/LandingPage';
 import { Dashboard } from './pages/Dashboard';
+import { AdminDashboard } from './pages/AdminDashboard';
 import { AuthPage } from './pages/AuthPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { UserRole } from './types';
 
 const AppContent = () => {
-  const { view } = useApp();
+  const { view, currentUser } = useApp();
+
+  // If user is admin and trying to view dashboard, show AdminDashboard instead
+  // Note: We bypass the standard Layout for Admin Dashboard as it has its own Sidebar layout
+  if (view === 'DASHBOARD' && currentUser?.role === UserRole.ADMIN) {
+    return <AdminDashboard />;
+  }
 
   return (
     <Layout>

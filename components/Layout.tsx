@@ -1,119 +1,72 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { useApp } from '../context/AppContext';
 import { Icons } from './Icons';
 
 export const Layout = ({ children }: { children?: React.ReactNode }) => {
-  const { currentUser, logout, setView, view } = useApp();
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const { currentUser, setView, view, logout } = useApp();
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsProfileOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleNavClick = (targetView: 'LANDING' | 'AUTH' | 'DASHBOARD' | 'PROFILE') => {
-    setView(targetView);
-    setIsProfileOpen(false);
-  };
+  if (view === 'LANDING' || view === 'AUTH') {
+    return <div className="min-h-screen">{children}</div>;
+  }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center cursor-pointer" onClick={() => handleNavClick(currentUser ? 'DASHBOARD' : 'LANDING')}>
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">kwibl</span>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              {currentUser ? (
-                <>
-                  <button 
-                    onClick={() => handleNavClick('DASHBOARD')}
-                    className={`text-sm font-medium transition-colors ${view === 'DASHBOARD' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-900'}`}
-                  >
-                    Dashboard
-                  </button>
-                  
-                  <div className="relative" ref={dropdownRef}>
-                    <button 
-                      onClick={() => setIsProfileOpen(!isProfileOpen)}
-                      className="flex items-center space-x-3 focus:outline-none"
-                    >
-                      <span className="text-sm text-slate-700 font-medium hidden sm:block">{currentUser.name}</span>
-                      <img 
-                        src={currentUser.avatar} 
-                        alt="Avatar" 
-                        className="h-9 w-9 rounded-full border border-slate-200 hover:border-indigo-300 transition-colors object-cover" 
-                      />
-                    </button>
-
-                    {/* Profile Dropdown */}
-                    {isProfileOpen && (
-                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-100 py-2 animate-fade-in z-50">
-                        <div className="px-4 py-3 border-b border-slate-50">
-                           <p className="text-sm font-bold text-slate-900 truncate">{currentUser.name}</p>
-                           <p className="text-xs text-slate-500 truncate">{currentUser.email}</p>
-                        </div>
-                        
-                        <button 
-                          onClick={() => handleNavClick('PROFILE')}
-                          className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center"
-                        >
-                          <Icons.User className="w-4 h-4 mr-2" />
-                          Account Settings
-                        </button>
-                        
-                        <div className="border-t border-slate-50 my-1"></div>
-                        
-                        <button 
-                          onClick={logout}
-                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
-                        >
-                          <Icons.LogOut className="w-4 h-4 mr-2" />
-                          Sign out
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="flex items-center gap-4">
-                   <button 
-                     onClick={() => handleNavClick('AUTH')}
-                     className="text-slate-600 font-medium hover:text-slate-900 text-sm"
-                   >
-                     Log in
-                   </button>
-                   <button 
-                     onClick={() => handleNavClick('AUTH')}
-                     className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
-                   >
-                     Sign up
-                   </button>
-                </div>
-              )}
-            </div>
+    <div className="min-h-screen flex bg-slate-50/50">
+      {/* Left Sidebar - Exact match to image */}
+      <aside className="w-[100px] lg:w-[280px] h-screen sticky top-0 bg-white border-r border-slate-100 flex flex-col items-center lg:items-stretch py-8 px-4 lg:px-8 z-[100]">
+        <div className="flex flex-col items-center lg:items-start mb-12">
+          <div className="w-16 h-16 rounded-[2rem] bg-indigo-600 flex items-center justify-center text-white shadow-2xl shadow-indigo-200 mb-6 group cursor-pointer hover:rotate-12 transition-transform">
+            <span className="text-3xl font-black italic">k</span>
           </div>
+          {currentUser && (
+            <div className="hidden lg:block text-center lg:text-left">
+              <img 
+                src={currentUser.avatar} 
+                className="w-16 h-16 rounded-full border-4 border-slate-50 shadow-xl object-cover mb-4" 
+                alt="Profile" 
+              />
+              <h2 className="text-lg font-black text-slate-900 leading-tight">{currentUser.name}</h2>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">@{currentUser.name.split(' ')[0].toLowerCase()}</p>
+            </div>
+          )}
         </div>
-      </nav>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <nav className="flex-1 space-y-3">
+          {[
+            { id: 'DASHBOARD', label: 'Newsfeed', icon: <Icons.Home className="w-6 h-6" /> },
+            { id: 'MESSAGES', label: 'Messages', icon: <Icons.MessageSquare className="w-6 h-6" /> },
+            { id: 'FORUMS', label: 'Forums', icon: <Icons.Globe className="w-6 h-6" /> },
+            { id: 'FRIENDS', label: 'Friends', icon: <Icons.Users className="w-6 h-6" /> },
+            { id: 'PRIVATE', label: 'Private', icon: <Icons.Shield className="w-6 h-6" /> },
+            { id: 'PROFILE', label: 'Settings', icon: <Icons.Settings className="w-6 h-6" /> },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setView(item.id as any)}
+              className={`w-full flex items-center justify-center lg:justify-start gap-5 p-4 rounded-[1.5rem] transition-all duration-300 ${
+                view === item.id || (view === 'DASHBOARD' && item.id === 'DASHBOARD')
+                  ? 'bg-slate-900 text-white shadow-2xl shadow-slate-200 translate-x-1'
+                  : 'text-slate-400 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              {item.icon}
+              <span className="hidden lg:block font-bold text-sm">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <button 
+          onClick={logout}
+          className="w-full flex items-center justify-center lg:justify-start gap-5 p-4 rounded-[1.5rem] text-red-400 hover:text-red-600 hover:bg-red-50 transition-all mt-auto"
+        >
+          <Icons.LogOut className="w-6 h-6" />
+          <span className="hidden lg:block font-bold text-sm">Sign Out</span>
+        </button>
+      </aside>
+
+      {/* Main Content Frame */}
+      <main className="flex-1 overflow-x-hidden p-6 lg:p-12">
         {children}
       </main>
-      
-      <footer className="bg-white border-t border-slate-200 py-6 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 text-center text-slate-500 text-sm">
-          &copy; {new Date().getFullYear()} kwibl. All rights reserved. Powered by Gemini API.
-        </div>
-      </footer>
     </div>
   );
 };

@@ -1,13 +1,12 @@
-import { GoogleGenAI, Type, SchemaType } from "@google/genai";
+
+import { GoogleGenAI, Type } from "@google/genai";
 import { SentimentData } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-
-// Initialize Gemini
-const ai = new GoogleGenAI({ apiKey });
+// Always use new GoogleGenAI({apiKey: process.env.API_KEY}); directly
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Helper to check if API key is present
-const hasKey = () => !!apiKey;
+const hasKey = () => !!process.env.API_KEY;
 
 export interface ComplaintScenario {
   id: string;
@@ -27,8 +26,9 @@ export const analyzeSentiment = async (text: string): Promise<SentimentData> => 
   }
 
   try {
+    // Using gemini-3-flash-preview for basic text tasks
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: 'gemini-3-flash-preview',
       contents: `Analyze the sentiment of the following customer complaint. Provide a score from -1 (very negative) to 1 (very positive), a label (Negative, Urgent, Neutral, Positive), a 1-sentence summary of the core issue, and detect the language of the text (e.g. "English", "Spanish", "French").\n\nComplaint: "${text}"`,
       config: {
         responseMimeType: "application/json",
@@ -45,7 +45,8 @@ export const analyzeSentiment = async (text: string): Promise<SentimentData> => 
       }
     });
 
-    const jsonStr = response.text;
+    // response.text is a property, not a method
+    const jsonStr = response.text?.trim();
     if (!jsonStr) throw new Error("No response from AI");
     return JSON.parse(jsonStr) as SentimentData;
 
@@ -59,8 +60,9 @@ export const translateText = async (text: string, targetLang: string): Promise<s
   if (!hasKey()) return "Translation unavailable without API Key.";
 
   try {
+    // Using gemini-3-flash-preview for translation tasks
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: 'gemini-3-flash-preview',
       contents: `Translate the following text into ${targetLang}. Only return the translated text.\n\nText: "${text}"`,
     });
     return response.text || "Translation error.";
@@ -74,8 +76,9 @@ export const generateProfessionalResponse = async (complaintText: string, compan
   if (!hasKey()) return "AI drafting unavailable without API Key.";
 
   try {
+    // Using gemini-3-flash-preview for drafting responses
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: 'gemini-3-flash-preview',
       contents: `You are a customer support agent for ${companyName}. Write a professional, empathetic, and solution-oriented response to the following complaint. Keep it under 100 words.\n\nComplaint: "${complaintText}"`,
     });
     return response.text || "";
@@ -85,24 +88,36 @@ export const generateProfessionalResponse = async (complaintText: string, compan
   }
 };
 
+export const analyzePolicy = async (policyText: string): Promise<string> => {
+    if (!hasKey()) return "Policy analysis unavailable without API Key.";
+
+    try {
+        // Using gemini-3-flash-preview for summarization tasks
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: `Analyze the following customer policy document. Identify key clauses related to refunds, returns, and data privacy. Summarize potential consumer risks or ambiguous terms. Format the output as a Markdown list.\n\nPolicy Text: "${policyText}"`,
+        });
+        return response.text || "Analysis complete.";
+    } catch (error) {
+        console.error("Policy analysis failed", error);
+        return "Failed to analyze policy.";
+    }
+};
+
 // --- New Features for Flow Form ---
 
 export const getCountryFromCoords = async (lat: number, lng: number): Promise<string> => {
-  // Try to use a browser-based heuristic or fallback if no key, but if key exists, use Gemini with Search
+  // Try to use a browser-based heuristic or fallback if no key, but if key exists, use Gemini
   if (!hasKey()) return "United States"; 
 
   try {
+    // Using gemini-3-flash-preview for simple Q&A
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: 'gemini-3-flash-preview',
       contents: `What country corresponds to these coordinates: ${lat}, ${lng}? Respond with ONLY the country name.`,
-      config: {
-        tools: [{googleSearch: {}}],
-      }
     });
-    // Extract country from response text which might be chatty with tools
-    // We just want the country name.
+    // Extract country from response text
     const text = response.text || "";
-    // Simple heuristic to clean up if it says "The country is X"
     const cleanText = text.replace(/The country (is|at these coordinates is) /i, '').replace(/\.$/, '').trim();
     return cleanText || "Unknown Location";
   } catch (error) {
@@ -115,8 +130,9 @@ export const searchBusinesses = async (country: string, industry: string): Promi
   if (!hasKey()) return [{ name: "Generic Business", logo: "" }];
 
   try {
+    // Using gemini-3-flash-preview for data listing tasks
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: 'gemini-3-flash-preview',
       contents: `List the top 20 most popular ${industry} businesses operating in ${country}. Return a JSON array of objects with properties: "name" (business name) and "domain" (website domain like google.com).`,
       config: {
         responseMimeType: "application/json",
@@ -134,7 +150,7 @@ export const searchBusinesses = async (country: string, industry: string): Promi
       }
     });
 
-    const jsonStr = response.text;
+    const jsonStr = response.text?.trim();
     const parsed = jsonStr ? JSON.parse(jsonStr) : [];
     
     if (Array.isArray(parsed)) {
@@ -164,8 +180,9 @@ export const getComplaintScenarios = async (businessName: string, industry: stri
   }
 
   try {
+    // Using gemini-3-flash-preview for creative generation tasks
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: 'gemini-3-flash-preview',
       contents: `
         Generate 4 specific, common complaint scenarios for a ${industry} business named ${businessName}.
         For each scenario, provide:
@@ -193,7 +210,7 @@ export const getComplaintScenarios = async (businessName: string, industry: stri
       }
     });
 
-    const jsonStr = response.text;
+    const jsonStr = response.text?.trim();
     return jsonStr ? JSON.parse(jsonStr) : [];
   } catch (error) {
     console.error("Scenario generation failed", error);
@@ -210,8 +227,9 @@ export const refineComplaint = async (businessName: string, industry: string, dr
   if (!hasKey()) return { professional: draftText, urgent: draftText, detailed: draftText };
 
   try {
+    // Using gemini-3-flash-preview for rewriting tasks
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: 'gemini-3-flash-preview',
       contents: `
         Rewrite the following customer complaint about ${businessName} (${industry}) into three distinct versions:
         1. Professional: Formal, polite, and fact-based.
@@ -234,7 +252,7 @@ export const refineComplaint = async (businessName: string, industry: string, dr
       }
     });
 
-    const jsonStr = response.text;
+    const jsonStr = response.text?.trim();
     return jsonStr ? JSON.parse(jsonStr) : { professional: draftText, urgent: draftText, detailed: draftText };
   } catch (error) {
     console.error("Template generation failed", error);
