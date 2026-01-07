@@ -83,6 +83,7 @@ export interface Complaint {
   history: ComplaintHistory[];
   views: number; // For admin analytics
   privateDetails?: Record<string, string>; // Sensitive data only for Admin/Business
+  attachment?: string; // Base64 encoded image string
 }
 
 export interface AnalyticsMetrics {

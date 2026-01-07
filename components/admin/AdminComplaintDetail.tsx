@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Complaint, ComplaintStatus } from '../../types';
 import { Icons } from '../Icons';
@@ -34,6 +35,15 @@ export const AdminComplaintDetail: React.FC<Props> = ({ complaint, onBack, onUpd
                <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{complaint.description}</p>
             </div>
 
+            {complaint.attachment && (
+              <div className="mt-8 border-b border-slate-100 pb-8">
+                 <label className="text-[10px] uppercase font-bold text-slate-400 block mb-4">Evidence Image</label>
+                 <div className="w-full max-w-2xl rounded-xl overflow-hidden border border-slate-200">
+                    <img src={complaint.attachment} alt="Evidence" className="w-full h-auto" />
+                 </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-6 mt-6 text-slate-400 text-sm font-medium">
                <span className="flex items-center gap-1"><Icons.ThumbsUp className="w-4 h-4" /> {complaint.upvotedBy.length} votes</span>
                <span className="flex items-center gap-1"><Icons.MessageSquare className="w-4 h-4" /> {complaint.comments.length} comments</span>
@@ -41,7 +51,7 @@ export const AdminComplaintDetail: React.FC<Props> = ({ complaint, onBack, onUpd
             </div>
           </div>
 
-          {/* Supporting Info */}
+          {/* Supporting Info (Private Data) */}
           <div className="bg-orange-50 border border-orange-200 rounded-2xl p-8 relative">
              <div className="absolute top-8 right-8 bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
                Admin Only
@@ -50,7 +60,19 @@ export const AdminComplaintDetail: React.FC<Props> = ({ complaint, onBack, onUpd
                 <Icons.FileText className="w-6 h-6 text-orange-500" />
                 <h3 className="text-lg font-bold text-orange-900">Supporting Information</h3>
              </div>
-             <p className="text-orange-700 text-sm italic">No supporting information was collected for this complaint.</p>
+             
+             {complaint.privateDetails && Object.keys(complaint.privateDetails).length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   {Object.entries(complaint.privateDetails).map(([k, v]) => (
+                      <div key={k} className="p-4 bg-white/50 rounded-lg border border-orange-100">
+                         <span className="text-[10px] font-black uppercase text-orange-400 block mb-1">{k}</span>
+                         <span className="text-sm font-bold text-slate-800">{v}</span>
+                      </div>
+                   ))}
+                </div>
+             ) : (
+                <p className="text-orange-700 text-sm italic">No sensitive supporting information was collected for this complaint.</p>
+             )}
           </div>
 
           {/* Comments Preview */}
@@ -61,7 +83,19 @@ export const AdminComplaintDetail: React.FC<Props> = ({ complaint, onBack, onUpd
             </div>
             {complaint.comments.length === 0 ? (
                <p className="text-slate-400 text-sm text-center py-10">No comments yet.</p>
-            ) : null}
+            ) : (
+                <div className="space-y-4">
+                   {complaint.comments.map(c => (
+                      <div key={c.id} className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                         <div className="flex items-center gap-2 mb-2">
+                            <span className="font-bold text-sm">{c.userName}</span>
+                            <span className="text-[10px] text-slate-400">{new Date(c.timestamp).toLocaleDateString()}</span>
+                         </div>
+                         <p className="text-sm text-slate-600">{c.content}</p>
+                      </div>
+                   ))}
+                </div>
+            )}
           </div>
         </div>
 
@@ -71,10 +105,16 @@ export const AdminComplaintDetail: React.FC<Props> = ({ complaint, onBack, onUpd
              <h4 className="font-bold text-slate-900 mb-4">Status Actions</h4>
              <button 
                onClick={() => onUpdateStatus(ComplaintStatus.RESOLVED)}
-               className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors"
+               className="w-full bg-slate-950 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-black transition-colors"
              >
                 <Icons.CheckCircle className="w-5 h-5" />
                 Mark as Resolved
+             </button>
+             <button 
+               onClick={() => onUpdateStatus(ComplaintStatus.IN_PROGRESS)}
+               className="w-full mt-3 bg-white border border-slate-200 text-slate-700 font-bold py-3 rounded-xl hover:bg-slate-50 transition-colors"
+             >
+                Set to In Progress
              </button>
           </div>
 
@@ -93,10 +133,10 @@ export const AdminComplaintDetail: React.FC<Props> = ({ complaint, onBack, onUpd
                 </div>
                 <div>
                    <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Category</label>
-                   <span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-bold">{complaint.category}</span>
+                   <span className="bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-bold">{complaint.category}</span>
                 </div>
                 <div>
-                   <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Business (Manual)</label>
+                   <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Target Business</label>
                    <span className="font-bold text-slate-800 text-sm">{complaint.companyName}</span>
                 </div>
                 <div className="pt-4 border-t border-slate-50 space-y-3">

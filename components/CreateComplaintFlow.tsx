@@ -44,8 +44,6 @@ export const CreateComplaintFlow: React.FC<Props> = ({ onClose, onSubmit, indust
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isAdminOrBusiness = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.BUSINESS;
-
   // --- Step 1: Location ---
   const detectLocation = () => {
     setIsLocating(true);
@@ -172,7 +170,7 @@ export const CreateComplaintFlow: React.FC<Props> = ({ onClose, onSubmit, indust
       category: industry,
       companyName: business,
       attachment: attachment || undefined,
-      privateDetails: isAdminOrBusiness ? dynamicFields : undefined
+      privateDetails: Object.keys(dynamicFields).length > 0 ? dynamicFields : undefined
     });
   };
 
@@ -318,7 +316,7 @@ export const CreateComplaintFlow: React.FC<Props> = ({ onClose, onSubmit, indust
                            ))}
                        </div>
                        
-                       {selectedScenarioId && isAdminOrBusiness && (
+                       {selectedScenarioId && (
                            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 animate-fade-in">
                                <h5 className="font-bold text-slate-800 mb-4 flex items-center">
                                    <Icons.List className="w-4 h-4 mr-2" /> 
@@ -326,7 +324,7 @@ export const CreateComplaintFlow: React.FC<Props> = ({ onClose, onSubmit, indust
                                </h5>
                                <div className="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-[10px] text-indigo-700 font-bold flex items-start gap-2">
                                   <Icons.Shield className="w-4 h-4 flex-shrink-0" />
-                                  <span>Notice: The information shared in this section is only visible to the admin and business and would not be shared on the frontend feed.</span>
+                                  <span>Notice: The information shared in this section is only visible to you, the business, and administrators. It will not be shared on the public frontend feed.</span>
                                </div>
                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                    {scenarios.find(s => s.id === selectedScenarioId)?.fields.map(field => (
@@ -342,7 +340,7 @@ export const CreateComplaintFlow: React.FC<Props> = ({ onClose, onSubmit, indust
                                        </div>
                                    ))}
                                </div>
-                               <p className="text-xs text-slate-500 italic">These sensitive details will be kept private from the public community feed.</p>
+                               <p className="text-xs text-slate-500 italic">Sensitive details like order numbers or dates help businesses resolve cases faster.</p>
                            </div>
                        )}
                    </div>
@@ -397,7 +395,7 @@ export const CreateComplaintFlow: React.FC<Props> = ({ onClose, onSubmit, indust
                         <span className="text-xs font-bold text-slate-500 uppercase">Complaint</span>
                         <div className="text-sm text-slate-700 whitespace-pre-wrap mt-1">{finalDescription}</div>
                     </div>
-                    {isAdminOrBusiness && Object.keys(dynamicFields).length > 0 && (
+                    {Object.keys(dynamicFields).length > 0 && (
                         <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
                              <span className="text-[10px] font-black uppercase text-indigo-400 block mb-2">Private Data Attached</span>
                              <div className="grid grid-cols-2 gap-2">

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Layout } from './components/Layout';
@@ -6,6 +7,9 @@ import { Dashboard } from './pages/Dashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AuthPage } from './pages/AuthPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { MessagesPage } from './pages/MessagesPage';
+import { CommunityPage } from './pages/CommunityPage';
+import { FriendsPage } from './pages/FriendsPage';
 import { UserRole } from './types';
 
 const AppContent = () => {
@@ -22,6 +26,9 @@ const AppContent = () => {
       {view === 'LANDING' && <LandingPage />}
       {view === 'AUTH' && <AuthPage />}
       {view === 'DASHBOARD' && <Dashboard />}
+      {view === 'MESSAGES' && <MessagesPage />}
+      {view === 'FORUMS' && <CommunityPage />}
+      {view === 'FRIENDS' && <FriendsPage />}
       {view === 'PROFILE' && <ProfilePage />}
     </Layout>
   );

@@ -1,7 +1,9 @@
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Complaint, User, UserRole, ComplaintStatus, Comment, UserSettings, SentimentData } from '../types';
 import { analyzeSentiment } from '../services/geminiService';
+
+export type AppView = 'LANDING' | 'AUTH' | 'DASHBOARD' | 'PROFILE' | 'MESSAGES' | 'FORUMS' | 'FRIENDS';
 
 interface RegisterData {
   name: string;
@@ -19,7 +21,7 @@ interface AppContextType {
   logout: () => void;
   updateProfile: (userId: string, data: Partial<User>) => Promise<void>;
   complaints: Complaint[];
-  addComplaint: (title: string, description: string, category: string, company: string, privateDetails?: Record<string, string>) => Promise<void>;
+  addComplaint: (title: string, description: string, category: string, company: string, privateDetails?: Record<string, string>, attachment?: string) => Promise<void>;
   updateComplaint: (id: string, updates: Partial<Complaint>) => Promise<void>;
   deleteComplaint: (id: string) => void;
   addComment: (complaintId: string, content: string, attachmentUrl?: string, parentId?: string, sentiment?: SentimentData) => void;
@@ -30,8 +32,8 @@ interface AppContextType {
   toggleCommentUpvote: (complaintId: string, commentId: string) => void;
   reportComment: (complaintId: string, commentId: string) => void;
   isLoading: boolean;
-  view: 'LANDING' | 'AUTH' | 'DASHBOARD' | 'PROFILE';
-  setView: (view: 'LANDING' | 'AUTH' | 'DASHBOARD' | 'PROFILE') => void;
+  view: AppView;
+  setView: (view: AppView) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -44,6 +46,16 @@ const DEFAULT_SETTINGS: UserSettings = {
 };
 
 const INITIAL_USERS: User[] = [
+  { 
+    id: 'admin_sys', 
+    name: 'Platform Admin', 
+    email: 'admin@kwibl.com', 
+    password: 'password123',
+    role: UserRole.ADMIN, 
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin',
+    bio: 'System Administrator.',
+    settings: DEFAULT_SETTINGS
+  },
   { 
     id: 'u1', 
     name: 'Alice Johnson', 
@@ -89,11 +101,45 @@ const INITIAL_COMPLAINTS: Complaint[] = [
 ];
 
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-  const [complaints, setComplaints] = useState<Complaint[]>(INITIAL_COMPLAINTS);
+  // Initialize state from LocalStorage or Defaults
+  const [users, setUsers] = useState<User[]>(() => {
+    const saved = localStorage.getItem('kwibl_users');
+    return saved ? JSON.parse(saved) : INITIAL_USERS;
+  });
+
+  const [complaints, setComplaints] = useState<Complaint[]>(() => {
+    const saved = localStorage.getItem('kwibl_complaints');
+    return saved ? JSON.parse(saved) : INITIAL_COMPLAINTS;
+  });
+
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('kwibl_current_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const [view, setView] = useState<AppView>(() => {
+    const savedUser = localStorage.getItem('kwibl_current_user');
+    return savedUser ? 'DASHBOARD' : 'LANDING';
+  });
+
   const [isLoading, setIsLoading] = useState(false);
-  const [view, setView] = useState<'LANDING' | 'AUTH' | 'DASHBOARD' | 'PROFILE'>('LANDING');
+
+  // Persistence Effects
+  useEffect(() => {
+    localStorage.setItem('kwibl_users', JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    localStorage.setItem('kwibl_complaints', JSON.stringify(complaints));
+  }, [complaints]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('kwibl_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('kwibl_current_user');
+    }
+  }, [currentUser]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
@@ -111,6 +157,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const register = async (data: RegisterData) => {
     setIsLoading(true);
     await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Check if user already exists
+    if (users.some(u => u.email.toLowerCase() === data.email.toLowerCase())) {
+        setIsLoading(false);
+        throw new Error('User already exists');
+    }
+
     const newUser: User = {
       id: `u${Date.now()}`,
       name: data.name,
@@ -121,6 +174,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${data.name}`,
       settings: DEFAULT_SETTINGS
     };
+    
     setUsers(prev => [...prev, newUser]);
     setCurrentUser(newUser);
     setView('DASHBOARD');
@@ -146,7 +200,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     setIsLoading(false);
   };
 
-  const addComplaint = async (title: string, description: string, category: string, company: string, privateDetails?: Record<string, string>) => {
+  const addComplaint = async (title: string, description: string, category: string, company: string, privateDetails?: Record<string, string>, attachment?: string) => {
     if (!currentUser) return;
     setIsLoading(true);
     const sentiment = await analyzeSentiment(description);
@@ -169,7 +223,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       tags: [],
       history: [{ status: ComplaintStatus.OPEN, timestamp: now }],
       views: 0,
-      privateDetails
+      privateDetails,
+      attachment
     };
     setComplaints(prev => [newComplaint, ...prev]);
     setIsLoading(false);

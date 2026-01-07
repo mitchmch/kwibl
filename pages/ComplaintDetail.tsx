@@ -186,7 +186,10 @@ export const ComplaintDetail: React.FC<Props> = ({ complaint, onBack }) => {
 
   const isBusinessOwner = currentUser?.role === UserRole.BUSINESS && currentUser?.companyName === complaint.companyName;
   const isAdmin = currentUser?.role === UserRole.ADMIN;
+  const isAuthor = currentUser?.id === complaint.authorId;
   const isAssigned = complaint.status !== ComplaintStatus.OPEN;
+
+  const canSeePrivateDetails = isAdmin || isAuthor || (isBusinessOwner && isAssigned);
 
   const handleRichText = (tag: 'B' | 'I' | 'L') => {
     if (!textareaRef.current) return;
@@ -255,8 +258,17 @@ export const ComplaintDetail: React.FC<Props> = ({ complaint, onBack }) => {
                 </p>
               </div>
 
-              {/* Private / Required Information Section (Admin & Assigned Business Only) */}
-              {(isAdmin || (isBusinessOwner && isAssigned)) && complaint.privateDetails && Object.keys(complaint.privateDetails).length > 0 && (
+              {/* Uploaded Evidence Gallery */}
+              {complaint.attachment && (
+                <div className="mb-16">
+                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] block mb-6">Evidence Gallery</span>
+                   <div className="w-full max-w-4xl rounded-[2.5rem] overflow-hidden shadow-2xl border-8 border-white bg-slate-100">
+                      <img src={complaint.attachment} alt="Evidence" className="w-full h-auto object-cover max-h-[600px]" />
+                   </div>
+                </div>
+              )}
+
+              {canSeePrivateDetails && complaint.privateDetails && Object.keys(complaint.privateDetails).length > 0 && (
                 <div className="mb-16 p-10 bg-indigo-950 rounded-[3rem] text-white shadow-2xl animate-fade-in relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-8 opacity-10">
                     <Icons.Shield className="w-40 h-40" />
@@ -271,7 +283,7 @@ export const ComplaintDetail: React.FC<Props> = ({ complaint, onBack }) => {
                     <div className="p-6 bg-white/10 backdrop-blur-xl border border-white/20 rounded-[2rem] mb-8">
                        <p className="text-sm font-bold text-indigo-200 flex items-center gap-3">
                          <Icons.AlertCircle className="w-5 h-5 flex-shrink-0" />
-                         Notice: The information shared in this section is only visible to the admin and business and would not be shared on the frontend feed.
+                         Notice: The information shared in this section is private and only visible to authorized accounts. It is hidden from the public feed.
                        </p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
