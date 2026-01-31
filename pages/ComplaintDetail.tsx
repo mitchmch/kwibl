@@ -20,6 +20,7 @@ interface CommentNodeProps {
   onReply: (comment: Comment) => void;
   blockedUsers: string[];
   onToggleBlock: (userId: string) => void;
+  parentAuthorName?: string;
 }
 
 const CommentNode: React.FC<CommentNodeProps> = ({
@@ -29,6 +30,7 @@ const CommentNode: React.FC<CommentNodeProps> = ({
   onReply,
   blockedUsers,
   onToggleBlock,
+  parentAuthorName,
 }) => {
   const { currentUser, toggleCommentUpvote, reportComment } = useApp();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -94,7 +96,7 @@ const CommentNode: React.FC<CommentNodeProps> = ({
 
         <div className="flex gap-6 md:gap-8">
           <div className="flex-shrink-0 relative">
-            <div className="w-16 h-16 md:w-20 md:h-20 rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white">
+            <div className={`rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white ${depth > 0 ? 'w-12 h-12 md:w-14 md:h-14' : 'w-16 h-16 md:w-20 md:h-20'}`}>
               <img src={comment.userAvatar} alt={comment.userName} className="w-full h-full object-cover" />
             </div>
             {comment.isOfficialResponse && (
@@ -106,18 +108,23 @@ const CommentNode: React.FC<CommentNodeProps> = ({
           
           <div className="flex-1 min-w-0 pt-1">
             <div className="flex items-center gap-3 mb-3 flex-wrap">
-              <span className="text-xl font-black text-slate-900 tracking-tighter leading-none">{comment.userName}</span>
+              <span className={`font-black text-slate-900 tracking-tighter leading-none ${depth > 0 ? 'text-lg' : 'text-xl'}`}>{comment.userName}</span>
               {comment.isOfficialResponse && (
                 <span className="px-3 py-1 rounded-full bg-indigo-600 text-white text-[9px] font-black uppercase tracking-[0.3em] shadow-lg shadow-indigo-100">
                   Business Lead
                 </span>
               )}
-              <span className="text-xs text-slate-300 font-bold uppercase tracking-widest ml-2">
+              {parentAuthorName && (
+                <span className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 text-indigo-500 rounded-lg text-[9px] font-black uppercase tracking-widest border border-indigo-100">
+                   <Icons.LogOut className="w-3 h-3 rotate-180" /> {parentAuthorName}
+                </span>
+              )}
+              <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest ml-2">
                 {new Date(comment.timestamp).toLocaleDateString()}
               </span>
             </div>
 
-            <div className={`text-slate-600 text-base md:text-lg leading-relaxed whitespace-pre-wrap font-medium tracking-tight ${translation ? 'italic text-indigo-900/60' : ''}`}>
+            <div className={`text-slate-600 leading-relaxed whitespace-pre-wrap font-medium tracking-tight ${depth > 0 ? 'text-base' : 'text-base md:text-lg'} ${translation ? 'italic text-indigo-900/60' : ''}`}>
               {translation || comment.content}
             </div>
 
@@ -133,17 +140,17 @@ const CommentNode: React.FC<CommentNodeProps> = ({
               </div>
             )}
             
-            <div className="mt-10 flex items-center gap-10 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+            <div className="mt-8 flex items-center gap-8 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
               <button onClick={() => toggleCommentUpvote(complaintId, comment.id)} className={`flex items-center gap-2.5 transition-all ${hasUpvoted ? 'text-indigo-600 scale-105' : 'hover:text-indigo-600 hover:-translate-y-0.5'}`}>
-                <Icons.ThumbsUp className={`w-5 h-5 ${hasUpvoted ? 'fill-current' : ''}`} />
+                <Icons.ThumbsUp className={`w-4 h-4 ${hasUpvoted ? 'fill-current' : ''}`} />
                 {comment.upvotes.length || 'Relevant'}
               </button>
               <button onClick={() => onReply(comment)} className="flex items-center gap-2.5 hover:text-indigo-600 transition-all hover:-translate-y-0.5">
-                <Icons.MessageSquare className="w-5 h-5" /> Reply
+                <Icons.MessageSquare className="w-4 h-4" /> Reply
               </button>
               {(comment.language && comment.language !== 'English') && (
                 <button onClick={handleTranslate} className="flex items-center gap-2.5 text-indigo-500 transition-all hover:opacity-70">
-                  <Icons.Globe className={`w-5 h-5 ${isTranslating ? 'animate-spin' : ''}`} />
+                  <Icons.Globe className={`w-4 h-4 ${isTranslating ? 'animate-spin' : ''}`} />
                   {translation ? 'Original' : 'Auto-Translate'}
                 </button>
               )}
@@ -153,16 +160,17 @@ const CommentNode: React.FC<CommentNodeProps> = ({
       </div>
 
       {comment.replies.length > 0 && (
-        <div className="ml-12 md:ml-24 border-l-4 border-slate-100/50 pl-10 md:pl-20 relative">
-           <div className="absolute top-0 left-[-4px] h-14 w-1 bg-indigo-500/10 rounded-full" />
+        <div className="ml-8 md:ml-16 border-l-2 border-indigo-500/10 pl-6 md:pl-12 relative mt-4">
           {comment.replies.map(reply => (
             <CommentNode 
               key={reply.id} 
               comment={reply} 
               complaintId={complaintId} 
               onReply={onReply} 
+              depth={depth + 1}
               blockedUsers={blockedUsers} 
               onToggleBlock={onToggleBlock}
+              parentAuthorName={comment.userName}
             />
           ))}
         </div>
@@ -178,6 +186,7 @@ export const ComplaintDetail: React.FC<Props> = ({ complaint, onBack }) => {
   const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'INSIGHTS' | 'HISTORY'>('INSIGHTS');
+  const [mainTab, setMainTab] = useState<'DISCUSSION' | 'HISTORY'>('DISCUSSION');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [attachment, setAttachment] = useState<string | null>(null);
   
@@ -213,9 +222,24 @@ export const ComplaintDetail: React.FC<Props> = ({ complaint, onBack }) => {
     setReplyTo(null);
     setAttachment(null);
     setIsProcessing(false);
+    
+    // Smooth scroll to the new content area if it was a reply
+    if (replyTo) {
+       window.scrollTo({ top: window.scrollY + 100, behavior: 'smooth' });
+    }
   };
 
   const charPercent = (commentText.length / MAX_COMMENT_LENGTH) * 100;
+
+  const getStatusColor = (status: ComplaintStatus) => {
+    switch (status) {
+      case ComplaintStatus.OPEN: return 'bg-blue-500';
+      case ComplaintStatus.IN_PROGRESS: return 'bg-amber-500';
+      case ComplaintStatus.RESOLVED: return 'bg-emerald-500';
+      case ComplaintStatus.ESCALATED: return 'bg-red-500';
+      default: return 'bg-slate-500';
+    }
+  };
 
   return (
     <div className="animate-fade-in max-w-[1440px] mx-auto pb-48 lg:pt-8 px-6 md:px-12 bg-slate-50 min-h-screen">
@@ -311,36 +335,78 @@ export const ComplaintDetail: React.FC<Props> = ({ complaint, onBack }) => {
           </div>
 
           <div className="space-y-10">
+            {/* Main Tabs Switcher */}
             <div className="flex items-center justify-between px-6">
-               <h3 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter flex items-center gap-5">
-                 Community Feed <span className="text-indigo-100 text-2xl font-black tracking-widest">/ {complaint.comments.length}</span>
-               </h3>
+               <div className="flex items-center gap-8">
+                  <button 
+                    onClick={() => setMainTab('DISCUSSION')}
+                    className={`text-2xl md:text-3xl font-black tracking-tighter transition-all relative pb-2 ${
+                      mainTab === 'DISCUSSION' ? 'text-slate-900' : 'text-slate-300 hover:text-slate-500'
+                    }`}
+                  >
+                    Community Discussion <span className="text-indigo-400/50">/ {complaint.comments.length}</span>
+                    {mainTab === 'DISCUSSION' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-full" />}
+                  </button>
+                  <button 
+                    onClick={() => setMainTab('HISTORY')}
+                    className={`text-2xl md:text-3xl font-black tracking-tighter transition-all relative pb-2 ${
+                      mainTab === 'HISTORY' ? 'text-slate-900' : 'text-slate-300 hover:text-slate-500'
+                    }`}
+                  >
+                    Case History
+                    {mainTab === 'HISTORY' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-full" />}
+                  </button>
+               </div>
                <div className="hidden md:flex items-center gap-3">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300">Synchronized</span>
                </div>
             </div>
 
-            {complaint.comments.length === 0 ? (
-               <div className="bg-white rounded-[3.5rem] p-32 text-center border-2 border-dashed border-slate-100 flex flex-col items-center">
-                  <div className="bg-indigo-50/50 w-28 h-28 rounded-[2rem] flex items-center justify-center mb-8">
-                     <Icons.MessageSquare className="w-12 h-12 text-indigo-200" />
+            {mainTab === 'DISCUSSION' ? (
+              <>
+                {complaint.comments.length === 0 ? (
+                   <div className="bg-white rounded-[3.5rem] p-32 text-center border-2 border-dashed border-slate-100 flex flex-col items-center">
+                      <div className="bg-indigo-50/50 w-28 h-28 rounded-[2rem] flex items-center justify-center mb-8">
+                         <Icons.MessageSquare className="w-12 h-12 text-indigo-200" />
+                      </div>
+                      <h4 className="text-2xl font-black text-slate-300 uppercase tracking-[0.2em]">Start the conversation</h4>
+                      <p className="text-slate-400 text-base mt-3 font-bold max-w-sm">Help the community by providing your insight or asking for clarification.</p>
+                   </div>
+                ) : (
+                  <div className="space-y-4">
+                    {complaint.comments.map(comment => (
+                      <CommentNode 
+                        key={comment.id} 
+                        comment={comment} 
+                        complaintId={complaint.id} 
+                        onReply={setReplyTo} 
+                        depth={0}
+                        blockedUsers={blockedUsers} 
+                        onToggleBlock={u => setBlockedUsers(p => p.includes(u) ? p.filter(x => x !== u) : [...p, u])}
+                      />
+                    ))}
                   </div>
-                  <h4 className="text-2xl font-black text-slate-300 uppercase tracking-[0.2em]">Start the conversation</h4>
-                  <p className="text-slate-400 text-base mt-3 font-bold max-w-sm">Help the community by providing your insight or asking for clarification.</p>
-               </div>
+                )}
+              </>
             ) : (
-              <div className="space-y-4">
-                {complaint.comments.map(comment => (
-                  <CommentNode 
-                    key={comment.id} 
-                    comment={comment} 
-                    complaintId={complaint.id} 
-                    onReply={setReplyTo} 
-                    blockedUsers={blockedUsers} 
-                    onToggleBlock={u => setBlockedUsers(p => p.includes(u) ? p.filter(x => x !== u) : [...p, u])}
-                  />
-                ))}
+              <div className="bg-white rounded-[3.5rem] p-10 md:p-16 shadow-[0_40px_100px_-30px_rgba(0,0,0,0.04)] border border-white animate-fade-in">
+                <div className="relative pl-12 border-l-4 border-slate-100 space-y-16 py-4">
+                  {complaint.history.map((entry, idx) => (
+                    <div key={idx} className="relative group">
+                      <div className={`absolute -left-[62px] top-1.5 w-10 h-10 rounded-[1.4rem] border-[6px] border-white shadow-xl transition-transform group-hover:scale-110 z-10 ${getStatusColor(entry.status)}`} />
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
+                        <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight">{entry.status.replace('_', ' ')}</h4>
+                        <div className="text-xs font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
+                          {new Date(entry.timestamp).toLocaleDateString()} at {new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                      </div>
+                      <p className="text-slate-500 text-sm font-medium max-w-2xl">
+                        {entry.note || `This case status was updated to ${entry.status.toLowerCase().replace('_', ' ')} by authorized personnel.`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -351,7 +417,7 @@ export const ComplaintDetail: React.FC<Props> = ({ complaint, onBack }) => {
           <div className="bg-white rounded-[3.5rem] shadow-[0_40px_80px_-25px_rgba(0,0,0,0.04)] border border-white overflow-hidden">
             <div className="flex p-4 bg-slate-50/50 border-b border-slate-100 gap-3">
               <button onClick={() => setSidebarTab('INSIGHTS')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-[0.4em] rounded-[1.8rem] transition-all ${sidebarTab === 'INSIGHTS' ? 'bg-white text-indigo-600 shadow-xl' : 'text-slate-400 hover:text-slate-600'}`}>Insights</button>
-              <button onClick={() => setSidebarTab('HISTORY')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-[0.4em] rounded-[1.8rem] transition-all ${sidebarTab === 'HISTORY' ? 'bg-white text-indigo-600 shadow-xl' : 'text-slate-400 hover:text-slate-600'}`}>Timeline</button>
+              <button onClick={() => setSidebarTab('HISTORY')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-[0.4em] rounded-[1.8rem] transition-all ${sidebarTab === 'HISTORY' ? 'bg-white text-indigo-600 shadow-xl' : 'text-slate-400 hover:text-slate-600'}`}>History</button>
             </div>
 
             <div className="p-10">
@@ -390,7 +456,7 @@ export const ComplaintDetail: React.FC<Props> = ({ complaint, onBack }) => {
                 <div className="space-y-14 animate-fade-in relative pl-10 border-l-4 border-slate-100 py-6 ml-4">
                    {complaint.history.map((entry, idx) => (
                     <div key={idx} className="relative group">
-                      <div className="absolute -left-[54px] top-1.5 w-8 h-8 rounded-[1.3rem] border-[6px] border-white bg-indigo-600 shadow-2xl group-hover:scale-125 transition-transform z-10" />
+                      <div className={`absolute -left-[54px] top-1.5 w-8 h-8 rounded-[1.3rem] border-[6px] border-white shadow-2xl group-hover:scale-125 transition-transform z-10 ${getStatusColor(entry.status)}`} />
                       <div className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] mb-1">{entry.status.replace('_', ' ')}</div>
                       <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">{new Date(entry.timestamp).toLocaleDateString()} at {new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                     </div>
