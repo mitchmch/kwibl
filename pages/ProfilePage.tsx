@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Icons } from '../components/Icons';
@@ -168,8 +169,8 @@ export const ProfilePage = () => {
                  </div>
 
                  {currentUser.role === UserRole.BUSINESS && (
-                    <div className="p-6 bg-indigo-50/50 rounded-2xl border border-indigo-100 animate-fade-in">
-                      <div className="flex items-center gap-2 mb-4">
+                    <div className="p-6 bg-indigo-50/50 rounded-2xl border border-indigo-100 animate-fade-in space-y-6">
+                      <div className="flex items-center gap-2">
                         <Icons.Briefcase className="w-5 h-5 text-indigo-600" />
                         <h3 className="font-black text-indigo-900 uppercase text-xs tracking-widest">Business Identity</h3>
                       </div>
@@ -184,23 +185,33 @@ export const ProfilePage = () => {
                             placeholder="e.g., kwibl Enterprises Ltd."
                           />
                         </div>
-                        <p className="text-[10px] text-indigo-400 font-bold">This name is used to match your account with community complaints.</p>
+                        <div>
+                          <label className="block text-xs font-bold text-indigo-700 mb-1">Service Description Highlights</label>
+                          <textarea 
+                             rows={3}
+                             value={bio}
+                             onChange={(e) => setBio(e.target.value)}
+                             className="w-full px-4 py-3 bg-white border border-indigo-200 rounded-xl text-sm font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm resize-none"
+                             placeholder="Briefly describe your services and resolution commitment..."
+                          />
+                        </div>
+                        <p className="text-[10px] text-indigo-400 font-bold">This information is displayed on your public business profile.</p>
                       </div>
                     </div>
                  )}
 
-                 <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
-                      {currentUser.role === UserRole.BUSINESS ? 'Service Description' : 'Personal Bio'}
-                    </label>
-                    <textarea 
-                       rows={5}
-                       value={bio}
-                       onChange={(e) => setBio(e.target.value)}
-                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none resize-none"
-                       placeholder={currentUser.role === UserRole.BUSINESS ? "Explain your business values and how you handle customer complaints..." : "Share a bit about your experiences or interests..."}
-                    />
-                 </div>
+                 {currentUser.role !== UserRole.BUSINESS && (
+                   <div>
+                      <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Personal Bio</label>
+                      <textarea 
+                         rows={5}
+                         value={bio}
+                         onChange={(e) => setBio(e.target.value)}
+                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none resize-none"
+                         placeholder="Share a bit about your experiences or interests..."
+                      />
+                   </div>
+                 )}
 
                  <div className="flex justify-end pt-4">
                     <button 
@@ -265,6 +276,47 @@ export const ProfilePage = () => {
               </div>
             )}
           </div>
+
+          {/* Business Public Preview */}
+          {activeTab === 'GENERAL' && currentUser.role === UserRole.BUSINESS && (
+            <div className="mt-8 bg-slate-900 rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden group">
+               <Icons.Globe className="absolute -top-10 -right-10 w-64 h-64 text-white opacity-5 group-hover:scale-110 transition-transform duration-1000" />
+               <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-8">
+                    <Icons.CheckCircle className="w-4 h-4 text-emerald-400" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-400">Public Business Profile Preview</span>
+                  </div>
+                  <div className="flex items-center gap-6 mb-8">
+                     <img src={avatar} className="w-20 h-20 rounded-[1.8rem] border-4 border-white/10 shadow-2xl" alt="" />
+                     <div>
+                        <h2 className="text-3xl font-black tracking-tighter">{companyName || 'Anonymous Brand'}</h2>
+                        <div className="flex items-center gap-4 mt-2">
+                           <div className="text-xs font-bold text-indigo-300">Verified Resolution Partner</div>
+                           <div className="w-1 h-1 bg-white/20 rounded-full" />
+                           <div className="text-xs font-bold text-slate-400">98% Satisfied</div>
+                        </div>
+                     </div>
+                  </div>
+                  <p className="text-slate-300 text-lg font-medium leading-relaxed italic mb-8 max-w-2xl">
+                    "{bio || 'No service description provided yet. Complete your identity to build trust with customers.'}"
+                  </p>
+                  <div className="grid grid-cols-3 gap-6 pt-8 border-t border-white/10">
+                     <div>
+                        <div className="text-2xl font-black tracking-tight">142</div>
+                        <div className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Cases Resolved</div>
+                     </div>
+                     <div>
+                        <div className="text-2xl font-black tracking-tight">4.9/5</div>
+                        <div className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Avg. Rating</div>
+                     </div>
+                     <div>
+                        <div className="text-2xl font-black tracking-tight">&lt; 2h</div>
+                        <div className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Response Time</div>
+                     </div>
+                  </div>
+               </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

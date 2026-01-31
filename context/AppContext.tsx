@@ -1,9 +1,9 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { Complaint, User, UserRole, ComplaintStatus, Comment, UserSettings, SentimentData } from '../types';
+import { Complaint, User, UserRole, ComplaintStatus, Comment, UserSettings, SentimentData, Priority } from '../types';
 import { analyzeSentiment } from '../services/geminiService';
 
-export type AppView = 'LANDING' | 'AUTH' | 'DASHBOARD' | 'PROFILE' | 'MESSAGES' | 'FORUMS' | 'FRIENDS';
+export type AppView = 'LANDING' | 'AUTH' | 'DASHBOARD' | 'PROFILE' | 'MESSAGES' | 'FORUMS' | 'FRIENDS' | 'MANAGER';
 
 interface RegisterData {
   name: string;
@@ -68,7 +68,7 @@ const INITIAL_USERS: User[] = [
   },
   { 
     id: 'b1', 
-    name: 'TechCorp Support', 
+    name: 'Support Agent', 
     email: 'support@techcorp.com', 
     password: 'password123',
     role: UserRole.BUSINESS, 
@@ -82,13 +82,16 @@ const INITIAL_USERS: User[] = [
 const INITIAL_COMPLAINTS: Complaint[] = [
   {
     id: 'c1',
+    taskKey: 'KB-1',
     title: 'Internet speed is consistently slow',
     description: 'I have been paying for 1GB speed but only getting 50mbps for the last week. Support keeps hanging up on me.',
     category: 'Telecommunications',
     companyName: 'TechCorp',
     status: ComplaintStatus.OPEN,
+    priority: Priority.HIGH,
     authorId: 'u1',
     authorName: 'Alice Johnson',
+    authorAvatar: 'https://picsum.photos/seed/alice/100/100',
     createdAt: new Date(Date.now() - 86400000).toISOString(),
     upvotedBy: ['u2', 'u3', 'u4', 'u5', 'u6'],
     downvotedBy: [],
@@ -96,12 +99,39 @@ const INITIAL_COMPLAINTS: Complaint[] = [
     sentiment: { score: -0.8, label: 'Negative', summary: 'Customer receiving 5% of paid speed, support unresponsive.', language: 'English' },
     tags: ['internet', 'speed', 'support'],
     history: [{ status: ComplaintStatus.OPEN, timestamp: new Date(Date.now() - 86400000).toISOString() }],
-    views: 124
+    views: 124,
+    impactScore: 85
+  },
+  {
+    id: 'c2',
+    taskKey: 'KB-2',
+    title: 'Unexpected billing charge on renewal',
+    description: 'My subscription was renewed at double the price without any prior notification. I want a refund.',
+    category: 'Finance',
+    companyName: 'TechCorp',
+    status: ComplaintStatus.IN_PROGRESS,
+    priority: Priority.MEDIUM,
+    assigneeId: 'b1',
+    assigneeName: 'Support Agent',
+    authorId: 'u2',
+    authorName: 'Bob Smith',
+    authorAvatar: 'https://picsum.photos/seed/bob/100/100',
+    createdAt: new Date(Date.now() - 43200000).toISOString(),
+    upvotedBy: ['u1'],
+    downvotedBy: [],
+    comments: [],
+    sentiment: { score: -0.4, label: 'Neutral', summary: 'Billing dispute regarding renewal notification.', language: 'English' },
+    tags: ['billing', 'refund', 'subscription'],
+    history: [
+      { status: ComplaintStatus.OPEN, timestamp: new Date(Date.now() - 43200000).toISOString() },
+      { status: ComplaintStatus.IN_PROGRESS, timestamp: new Date(Date.now() - 3600000).toISOString() }
+    ],
+    views: 56,
+    impactScore: 50
   }
 ];
 
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
-  // Initialize state from LocalStorage or Defaults
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem('kwibl_users');
     return saved ? JSON.parse(saved) : INITIAL_USERS;
@@ -119,12 +149,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
   const [view, setView] = useState<AppView>(() => {
     const savedUser = localStorage.getItem('kwibl_current_user');
-    return savedUser ? 'DASHBOARD' : 'LANDING';
+    if (savedUser) {
+      const user = JSON.parse(savedUser) as User;
+      if (user.role === UserRole.BUSINESS) return 'MANAGER';
+      return 'DASHBOARD';
+    }
+    return 'LANDING';
   });
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // Persistence Effects
   useEffect(() => {
     localStorage.setItem('kwibl_users', JSON.stringify(users));
   }, [users]);
@@ -148,7 +182,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     setIsLoading(false);
     if (user) {
       setCurrentUser(user);
-      setView('DASHBOARD');
+      if (user.role === UserRole.BUSINESS) {
+        setView('MANAGER');
+      } else {
+        setView('DASHBOARD');
+      }
       return true;
     }
     return false;
@@ -158,7 +196,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     setIsLoading(true);
     await new Promise(resolve => setTimeout(resolve, 800));
     
-    // Check if user already exists
     if (users.some(u => u.email.toLowerCase() === data.email.toLowerCase())) {
         setIsLoading(false);
         throw new Error('User already exists');
@@ -177,7 +214,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     
     setUsers(prev => [...prev, newUser]);
     setCurrentUser(newUser);
-    setView('DASHBOARD');
+    if (newUser.role === UserRole.BUSINESS) {
+      setView('MANAGER');
+    } else {
+      setView('DASHBOARD');
+    }
     setIsLoading(false);
   };
 
@@ -205,15 +246,19 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     setIsLoading(true);
     const sentiment = await analyzeSentiment(description);
     const now = new Date().toISOString();
+    const taskNumber = complaints.length + 1;
     const newComplaint: Complaint = {
       id: `c${Date.now()}`,
+      taskKey: `KB-${taskNumber}`,
       title,
       description,
       category,
       companyName: company,
       status: ComplaintStatus.OPEN,
+      priority: Priority.MEDIUM,
       authorId: currentUser.id,
       authorName: currentUser.name,
+      authorAvatar: currentUser.avatar,
       createdAt: now,
       upvotedBy: [],
       downvotedBy: [],
@@ -224,7 +269,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       history: [{ status: ComplaintStatus.OPEN, timestamp: now }],
       views: 0,
       privateDetails,
-      attachment
+      attachment,
+      impactScore: Math.floor(Math.random() * 100)
     };
     setComplaints(prev => [newComplaint, ...prev]);
     setIsLoading(false);
@@ -272,6 +318,24 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }));
   };
 
+  const updateStatus = (complaintId: string, status: ComplaintStatus) => {
+    setComplaints(prev => prev.map(c => {
+      if (c.id === complaintId && c.status !== status) {
+        const newHistory = [...(c.history || []), { status, timestamp: new Date().toISOString() }];
+        return { 
+          ...c, 
+          status, 
+          history: newHistory,
+          // If moving to in progress, assign to current business user if applicable
+          assigneeId: (status === ComplaintStatus.IN_PROGRESS && currentUser?.role === UserRole.BUSINESS) ? currentUser.id : c.assigneeId,
+          assigneeName: (status === ComplaintStatus.IN_PROGRESS && currentUser?.role === UserRole.BUSINESS) ? currentUser.name : c.assigneeName,
+        };
+      }
+      return c;
+    }));
+  };
+
+  // Remaining methods (toggleUpvote, etc.) same as original
   const reportComment = (complaintId: string, commentId: string) => {
     if (!currentUser) return;
     const markReported = (comments: Comment[]): Comment[] => {
@@ -287,10 +351,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return c;
       });
     };
-
-    setComplaints(prev => prev.map(c => 
-      c.id === complaintId ? { ...c, comments: markReported(c.comments) } : c
-    ));
+    setComplaints(prev => prev.map(c => c.id === complaintId ? { ...c, comments: markReported(c.comments) } : c));
   };
 
   const toggleCommentUpvote = (complaintId: string, commentId: string) => {
@@ -309,16 +370,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         });
     };
     setComplaints(prev => prev.map(c => c.id === complaintId ? { ...c, comments: updateCommentVotes(c.comments) } : c));
-  };
-
-  const updateStatus = (complaintId: string, status: ComplaintStatus) => {
-    setComplaints(prev => prev.map(c => {
-      if (c.id === complaintId && c.status !== status) {
-        const newHistory = [...(c.history || []), { status, timestamp: new Date().toISOString() }];
-        return { ...c, status, history: newHistory };
-      }
-      return c;
-    }));
   };
 
   const toggleUpvote = (complaintId: string) => {

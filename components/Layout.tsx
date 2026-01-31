@@ -2,11 +2,13 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { Icons } from './Icons';
+import { UserRole } from '../types';
 
 export const Layout = ({ children }: { children?: React.ReactNode }) => {
   const { currentUser, setView, view, logout } = useApp();
 
-  if (view === 'LANDING' || view === 'AUTH') {
+  // Kwible Manager (Business) and Admin Dashboard provide their own full-screen layouts
+  if (view === 'LANDING' || view === 'AUTH' || (view === 'MANAGER' && currentUser?.role === UserRole.BUSINESS)) {
     return <div className="min-h-screen">{children}</div>;
   }
 
@@ -25,17 +27,18 @@ export const Layout = ({ children }: { children?: React.ReactNode }) => {
 
         <nav className="flex-1 px-4 mt-4 space-y-1">
           {[
-            { id: 'DASHBOARD', label: 'Feeds', icon: <Icons.Home className="w-5 h-5" /> },
-            { id: 'MESSAGES', label: 'Messages', icon: <Icons.MessageSquare className="w-5 h-5" /> },
-            { id: 'FORUMS', label: 'Community', icon: <Icons.Globe className="w-5 h-5" /> },
-            { id: 'FRIENDS', label: 'Friends', icon: <Icons.Users className="w-5 h-5" /> },
-            { id: 'PROFILE', label: 'Settings', icon: <Icons.Settings className="w-5 h-5" /> },
-          ].map((item) => (
+            { id: 'DASHBOARD', label: 'Feeds', icon: <Icons.Home className="w-5 h-5" />, roles: [UserRole.CUSTOMER, UserRole.ADMIN] },
+            { id: 'MANAGER', label: 'Manager', icon: <Icons.LayoutDashboard className="w-5 h-5" />, roles: [UserRole.BUSINESS] },
+            { id: 'MESSAGES', label: 'Messages', icon: <Icons.MessageSquare className="w-5 h-5" />, roles: [UserRole.CUSTOMER, UserRole.BUSINESS, UserRole.ADMIN] },
+            { id: 'FORUMS', label: 'Community', icon: <Icons.Globe className="w-5 h-5" />, roles: [UserRole.CUSTOMER, UserRole.ADMIN] },
+            { id: 'FRIENDS', label: 'Friends', icon: <Icons.Users className="w-5 h-5" />, roles: [UserRole.CUSTOMER, UserRole.ADMIN] },
+            { id: 'PROFILE', label: 'Settings', icon: <Icons.Settings className="w-5 h-5" />, roles: [UserRole.CUSTOMER, UserRole.BUSINESS, UserRole.ADMIN] },
+          ].filter(item => !currentUser || item.roles.includes(currentUser.role)).map((item) => (
             <button
               key={item.id}
               onClick={() => setView(item.id as any)}
               className={`w-full flex items-center justify-center lg:justify-start gap-4 p-3.5 rounded-xl transition-all font-semibold text-sm ${
-                view === item.id || (view === 'DASHBOARD' && item.id === 'DASHBOARD')
+                view === item.id
                   ? 'bg-slate-900 text-white shadow-md'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/60'
               }`}

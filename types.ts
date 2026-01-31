@@ -12,6 +12,13 @@ export enum ComplaintStatus {
   ESCALATED = 'ESCALATED'
 }
 
+export enum Priority {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL'
+}
+
 export interface UserSettings {
   emailNotifications: boolean;
   pushNotifications: boolean;
@@ -63,13 +70,18 @@ export interface ComplaintHistory {
 
 export interface Complaint {
   id: string;
+  taskKey: string; // Jira-style key (e.g., KB-123)
   title: string;
   description: string;
   category: string;
   companyName: string; // The company being complained about
   status: ComplaintStatus;
+  priority: Priority;
   authorId: string;
   authorName: string;
+  authorAvatar?: string;
+  assigneeId?: string;
+  assigneeName?: string;
   createdAt: string;
   upvotedBy: string[]; // Track user IDs who upvoted
   downvotedBy: string[]; // Track user IDs who downvoted
@@ -84,6 +96,7 @@ export interface Complaint {
   views: number; // For admin analytics
   privateDetails?: Record<string, string>; // Sensitive data only for Admin/Business
   attachment?: string; // Base64 encoded image string
+  impactScore?: number; // AI calculated priority score
 }
 
 export interface AnalyticsMetrics {
@@ -111,4 +124,12 @@ export type AdminViewType =
   | 'SETTINGS_GENERAL'
   | 'SETTINGS_BRANDING'
   | 'SETTINGS_TECH_STACK'
-  | 'COMPLAINT_DETAIL';
+  | 'COMPLAINT_DETAIL'
+  | 'PRODUCT_DISCOVERY';
+
+export type BusinessViewType = 
+  | 'BOARD'
+  | 'BACKLOG'
+  | 'REPORTS'
+  | 'COMPONENTS'
+  | 'SETTINGS';
